@@ -1,0 +1,38 @@
+# --- Backend (Python) ---
+backend/.venv/
+backend/__pycache__/
+**/__pycache__/
+*.pyc
+backend/data/app.db
+backend/data/app.db-*
+backend/data/images/original/*
+backend/data/images/masks/*
+backend/data/images/previews/*
+backend/data/images/final/*
+!backend/data/images/**/.gitkeep
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/*.egg-info/
+backend/htmlcov/
+backend/.coverage
+backend/.env
+backend/models_cache/
+
+# --- Frontend (Node) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.local
+frontend/coverage/
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log

@@ -1,0 +1,62 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #f4f5f7;
+  color: #1a1a1a;
+}
+
+.editor-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+}
+
+.editor-page h1 {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.image-uploader {
+  border: 2px dashed #b3b8c2;
+  border-radius: 12px;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color 0.15s ease;
+}
+
+.image-uploader:hover,
+.image-uploader:focus-visible {
+  border-color: #4f7cff;
+  outline: none;
+}
+
+.error-message {
+  color: #c0362c;
+  background: #fdecea;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-top: 1rem;
+}
+
+.uploaded-preview {
+  margin-top: 1.5rem;
+}
+
+.uploaded-preview img {
+  max-width: 100%;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  display: block;
+}
+
+.uploaded-preview p {
+  color: #666;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
