@@ -5,7 +5,9 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5173,
+    // 5180, not the Vite default 5173: that port is already used by
+    // another project on this machine.
+    port: 5180,
   },
   test: {
     environment: "jsdom",

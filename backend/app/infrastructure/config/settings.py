@@ -24,8 +24,9 @@ class Settings(BaseSettings):
     # adapter's engine construction). ---
     database_url: str = f"sqlite:///{BACKEND_ROOT / 'data' / 'app.db'}"
 
-    # --- CORS (the Vite dev server) ---
-    cors_allow_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    # --- CORS (the Vite dev server). 5180, not 5173: the default 5173 is
+    # already used by another project on this machine. ---
+    cors_allow_origins: list[str] = ["http://localhost:5180", "http://127.0.0.1:5180"]
 
     # --- ComfyUI (Infrastructure/image_editing/comfyui) ---
     comfyui_base_url: str = "http://127.0.0.1:8188"

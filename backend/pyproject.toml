@@ -21,12 +21,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Heavy ML stack for detection/segmentation (Phase 3). Installed separately —
-# torch needs a CUDA-specific index URL (see backend/README.md), so it is not
-# a plain PyPI dependency here.
+# Heavy ML stack for detection/segmentation (Phase 3). torch/torchvision are
+# NOT listed here on purpose — they need a CUDA-specific index URL (pinned to
+# match ComfyUI's own cu130 build for RTX 5080/Blackwell support) and must be
+# installed as a separate step; see backend/README.md.
 ml = [
-    "torch",
-    "torchvision",
     "ultralytics>=8.3",
     "sam2>=1.0",
     "huggingface-hub>=0.26",
@@ -46,7 +45,9 @@ pythonpath = ["."]
 testpaths = ["tests"]
 markers = [
     "live_comfyui: requires a real local ComfyUI server running (opt-in, not run by default)",
+    "live_models: requires the real YOLO/SAM2 weights + the ml extra installed (opt-in, not run by default)",
 ]
+addopts = "-m \"not live_comfyui and not live_models\""
 
 [tool.ruff]
 line-length = 100

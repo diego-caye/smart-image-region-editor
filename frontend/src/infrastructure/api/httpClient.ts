@@ -3,7 +3,9 @@
  * fetch into an error. adapters/http/* are the only callers.
  */
 
-const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
+// 8420, not 8000: the default 8000 is already used by another project on
+// this machine (see ../../../.env.example at the repo root).
+const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8420";
 
 export class ApiError extends Error {
   constructor(

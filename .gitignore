@@ -1,3 +1,6 @@
+# --- Docker Compose env (root) ---
+/.env
+
 # --- Backend (Python) ---
 backend/.venv/
 backend/__pycache__/

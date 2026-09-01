@@ -35,7 +35,7 @@ describe("HttpImageApi", () => {
       imageId: "img-1",
       width: 800,
       height: 600,
-      url: "http://127.0.0.1:8000/static/original/img-1.png",
+      url: "http://127.0.0.1:8420/static/original/img-1.png",
     });
 
     const [, init] = vi.mocked(fetch).mock.calls[0];

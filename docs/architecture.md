@@ -37,13 +37,15 @@ app/
     http/               controllers (FastAPI routers) + schemas (Pydantic)
     persistence/         SqlAlchemyImageRepository — traduce entidades de
                        dominio ↔ tablas SQLModel
-    vision/              (Fase 3) traduce salida cruda de YOLO/SAM2 a
-                       DetectedRegion/Mask
+    vision/              YoloImageDetector, Sam2ImageSegmenter — traducen
+                       salida cruda de YOLO/SAM2 a DetectedRegion/Mask
     image_editing/        (Fase 5) ComfyUIImageEditor — traduce EditOperation
                        a un workflow de ComfyUI
     imaging/              (Fase 5) PillowImageCompositor
   infrastructure/
-    vision/               (Fase 3) wrappers crudos de Ultralytics/SAM2
+    vision/               device.py, model_registry.py, YoloDetector,
+                       Sam2MaskPredictor — wrappers crudos de
+                       Ultralytics/SAM2, sin saber nada de Domain
     image_editing/comfyui/ (Fase 5) cliente HTTP/WS real de ComfyUI +
                        plantillas de workflow + tabla operación→prompt
     storage/              FilesystemImageStorage
@@ -52,6 +54,9 @@ app/
   main.py                composition root: construye adapters, los inyecta
                        en los casos de uso, monta los routers
 ```
+
+`backend/Dockerfile`, `frontend/Dockerfile` y `docker-compose.yml` (raíz)
+despliegan ambos servicios — ver la sección "Docker" más abajo.
 
 ### Por qué existe `ImageCompositor` (no estaba en el árbol original)
 
@@ -89,6 +94,32 @@ sola GPU (RTX 5080, 16GB). Mitigación en `infrastructure/config/settings.py`:
   empaquetado en `.safetensors` para su propio nodo, incompatible con el
   paquete oficial `sam2` de pip — el backend descarga/cachea su propia copia
   vía Hugging Face Hub (`facebook/sam2-hiera-base-plus`) la primera vez.
+
+**Verificado, no solo implementado**: `torch==2.10.0+cu130` (idéntico al
+build que usa ComfyUI) reconoce la RTX 5080 (`compute capability (12, 0)`,
+Blackwell). Contra una foto real: `YoloImageDetector` detectó cara + ambas
+manos con confianzas 0.87/0.75/0.56 y la heurística izquierda/derecha las
+asignó correctamente; `Sam2ImageSegmenter`, alimentado con la caja de la
+cara detectada, produjo una máscara real recortada al contorno de pelo/cara
+(no un rectángulo) en ~16s incluyendo la descarga del checkpoint. La API
+real de `sam2` (no adivinada) se confirmó leyendo
+`sam2/sam2_image_predictor.py` y `sam2/build_sam.py` del paquete instalado:
+`SAM2ImagePredictor.from_pretrained(model_id, device=...)` →
+`predictor.set_image(rgb_ndarray)` → `predictor.predict(box=xyxy_array,
+multimask_output=False)`. El checkpoint se descarga vía
+`huggingface_hub.hf_hub_download`, cuya ubicación de cache solo se controla
+con la variable de entorno `HF_HOME` (no hay parámetro `cache_dir` en la
+cadena de llamadas) — de ahí que `Sam2MaskPredictor` fije `HF_HOME` en vez
+de pasar un kwarg.
+
+**Heurística izquierda/derecha**: `hand_yolov8n.pt` detecta "una mano", sin
+lateralidad. Con dos manos, la más a la izquierda en pantalla se asigna como
+la derecha del sujeto (convención espejo) y viceversa; con una sola, se
+compara su centro contra el punto medio horizontal de la imagen. Documentado
+como limitación conocida en
+`adapters/vision/yolo_sam2_image_detector.py::_assign_hand_sides` —
+mejorarlo (p. ej. con un modelo de pose que dé lateralidad real por
+muñeca/codo) es un cambio contenido a esa función.
 
 ### ComfyUI — API real (no inventada)
 
@@ -167,19 +198,62 @@ componente importa `fetch` ni conoce una ruta del backend directamente.
 - `backend/tests/integration/` — `SqlAlchemyImageRepository` contra SQLite
   real (tmp file) y la API completa vía `TestClient` con
   `dependency_overrides` para aislar storage/DB por test.
+- `backend/tests/unit/adapters/` — `YoloImageDetector` (heurística
+  izquierda/derecha, traducción a `DetectedRegion`) contra dobles de prueba
+  con la misma interfaz que `YoloDetector`; nada de torch/ultralytics real,
+  corre en milisegundos.
+- `backend/tests/integration/test_vision_live.py` — opt-in
+  (`pytest -m live_models`), contra los modelos YOLO/SAM2 reales. No corre
+  por defecto (`addopts` en `pyproject.toml` los excluye) porque necesita la
+  extra `ml` instalada y los pesos en disco.
 - `frontend/src/**/*.test.{ts,tsx}` — `HttpImageApi` con `fetch` mockeado,
   `EditorPage` con un `FakeImageApiPort` inyectado en el Context.
 
+## Docker
+
+`docker-compose.yml` (raíz) construye dos imágenes:
+
+- **backend** (`backend/Dockerfile`): `python:3.12-slim` — no una imagen
+  `nvidia/cuda`, porque las wheels `cu130` de PyTorch traen su propio
+  runtime CUDA como dependencias pip; solo hace falta que el host exponga la
+  GPU al contenedor. `torch`/`torchvision` se instalan **antes** que el
+  resto (mismo pin `cu130` que en nativo) para que el `torch` sin pinear que
+  piden `ultralytics`/`sam2` como dependencia no lo reemplace por una build
+  sin soporte para esta GPU. Acceso a GPU vía
+  `deploy.resources.reservations.devices` (Compose Spec, funciona con
+  `docker compose up` normal, sin swarm) — confirmado funcionando en esta
+  máquina (`docker run --gpus all ... nvidia-smi` ve la RTX 5080).
+- **frontend** (`frontend/Dockerfile`): build multi-stage, `node:20-alpine`
+  → `nginx:1.27-alpine` sirviendo el `dist/` estático.
+  `VITE_API_BASE_URL` se pasa como build-arg (las env vars de Vite son de
+  compile-time) con la URL que el *navegador* debe usar — el puerto del
+  host, no el interno del contenedor.
+
+Puntos que cambian entre nativo y Docker (ambos vía env, ningún código
+distinto):
+
+- `COMFYUI_BASE_URL`: `127.0.0.1:8188` nativo →
+  `host.docker.internal:8188` en Docker (dentro de un contenedor,
+  `127.0.0.1` se refiere al propio contenedor).
+- Pesos YOLO: rutas de Windows nativo → `COMFYUI_MODELS_DIR` del host
+  montado de solo lectura en `/comfyui_models` dentro del contenedor.
+- Persistencia: `backend/data/` nativo → volúmenes con nombre
+  (`backend_data`, `models_cache`) para que sobrevivan a
+  `docker compose down`.
+- Puertos: `8420`/`5180` en ambos casos — elegidos porque `8000`/`5173`
+  (los defaults de FastAPI/Vite) ya están en uso por otro proyecto en esta
+  máquina; configurables en el `.env` de la raíz.
+
 ## Próximos pasos (no implementados todavía)
 
-1. **Detección** (`adapters/vision`, `infrastructure/vision`): YOLOv8 cara/mano
-   + SAM2 para máscaras precisas. Requiere instalar `torch` con un índice
-   compatible con RTX 5080 (Blackwell, `sm_120`) — un `pip install torch`
-   normal puede resolver una build sin soporte para esta GPU.
-2. **Edición localizada** (`infrastructure/image_editing/comfyui`,
+1. **Edición localizada** (`infrastructure/image_editing/comfyui`,
    `adapters/image_editing`, `adapters/imaging`): cliente ComfyUI real,
    plantilla de workflow API-format basada en `TextEncodeQwenImageEditPlus`
    + `InpaintModelConditioning`, y `PillowImageCompositor`.
+2. **Frontend**: overlay de regiones seleccionables sobre la imagen
+   (`RegionOverlay`) y la galería visual de operaciones (`OperationGallery`)
+   — el backend de ambos (`/analyze`, `/regions/{tipo}/operations`) ya
+   existe y está probado.
 3. **Boca/Ojos**: `RegionType` y el catálogo de operaciones ya los
    contemplan; falta conectar un detector (candidato:
    `MediaPipeFaceLandmarker`, ya instalado en ComfyUI, o su equivalente en

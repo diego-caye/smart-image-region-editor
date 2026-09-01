@@ -1,0 +1,59 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "${BACKEND_PORT:-8420}:8000"
+    environment:
+      COMFYUI_BASE_URL: ${COMFYUI_BASE_URL:-http://host.docker.internal:8188}
+      COMFYUI_POLL_INTERVAL_SECONDS: "1.0"
+      COMFYUI_TIMEOUT_SECONDS: "180.0"
+      STORAGE_ROOT: /app/data/images
+      DATABASE_URL: sqlite:////app/data/app.db
+      CORS_ALLOW_ORIGINS: '["http://localhost:${FRONTEND_PORT:-5180}","http://127.0.0.1:${FRONTEND_PORT:-5180}"]'
+      DETECTION_DEVICE: ${DETECTION_DEVICE:-cpu}
+      SEGMENTATION_DEVICE: ${SEGMENTATION_DEVICE:-cuda}
+      # ComfyUI's models dir is mounted read-only below; these paths are
+      # where face/hand YOLO weights live inside it.
+      YOLO_FACE_MODEL_PATH: /comfyui_models/ultralytics/bbox/face_yolov8n.pt
+      YOLO_HAND_MODEL_PATH: /comfyui_models/ultralytics/bbox/hand_yolov8n.pt
+      SAM2_MODEL_ID: ${SAM2_MODEL_ID:-facebook/sam2-hiera-base-plus}
+      MODELS_CACHE_DIR: /app/models_cache
+    volumes:
+      - backend_data:/app/data
+      - models_cache:/app/models_cache
+      - ${COMFYUI_MODELS_DIR:-C:/ComfyUI/models}:/comfyui_models:ro
+    extra_hosts:
+      # host.docker.internal usually resolves automatically on Docker
+      # Desktop; this is a no-op there and a fallback for Linux Docker
+      # Engine, where it doesn't by default.
+      - "host.docker.internal:host-gateway"
+    # Remove this whole `deploy` block to run detection/segmentation
+    # CPU-only (also set SEGMENTATION_DEVICE=cpu above) on a machine without
+    # the nvidia container runtime.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Baked in at build time (Vite env vars are compile-time) — this is
+        # the URL the *browser* reaches the backend at, i.e. the host's
+        # mapped port, not the container-internal one.
+        VITE_API_BASE_URL: http://localhost:${BACKEND_PORT:-8420}
+    ports:
+      - "${FRONTEND_PORT:-5180}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend_data:
+  models_cache:
