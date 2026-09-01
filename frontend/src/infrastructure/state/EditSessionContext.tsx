@@ -1,31 +1,95 @@
 import { createContext, useContext, useMemo, useReducer, type Dispatch, type ReactNode } from "react";
 import { HttpImageApi } from "../../adapters/http/HttpImageApi";
-import type { ImageApiPort } from "../../application/ports/ImageApiPort";
+import type { ImageApiPort, OperationCatalogEntry } from "../../application/ports/ImageApiPort";
+import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
+import type { EditOperation } from "../../domain/types/EditOperation";
 
 export type UploadStatus = "idle" | "uploading" | "ready" | "error";
+export type AnalysisStatus = "idle" | "analyzing" | "ready" | "error";
+export type OperationsStatus = "idle" | "loading" | "ready" | "error";
 
 export interface EditSessionState {
   status: UploadStatus;
   image: UploadedImage | null;
   errorMessage: string | null;
+
+  analysisStatus: AnalysisStatus;
+  analysisError: string | null;
+  regions: Region[];
+
+  selectedRegionId: string | null;
+  operationsStatus: OperationsStatus;
+  operationsError: string | null;
+  operations: OperationCatalogEntry[];
+
+  selectedOperation: EditOperation | null;
 }
 
 export type EditSessionAction =
   | { type: "UPLOAD_START" }
   | { type: "UPLOAD_SUCCESS"; image: UploadedImage }
-  | { type: "UPLOAD_ERROR"; message: string };
+  | { type: "UPLOAD_ERROR"; message: string }
+  | { type: "ANALYZE_START" }
+  | { type: "ANALYZE_SUCCESS"; regions: Region[] }
+  | { type: "ANALYZE_ERROR"; message: string }
+  | { type: "SELECT_REGION"; regionId: string }
+  | { type: "OPERATIONS_START" }
+  | { type: "OPERATIONS_SUCCESS"; operations: OperationCatalogEntry[] }
+  | { type: "OPERATIONS_ERROR"; message: string }
+  | { type: "SELECT_OPERATION"; operation: EditOperation };
 
-const initialState: EditSessionState = { status: "idle", image: null, errorMessage: null };
+const initialState: EditSessionState = {
+  status: "idle",
+  image: null,
+  errorMessage: null,
+  analysisStatus: "idle",
+  analysisError: null,
+  regions: [],
+  selectedRegionId: null,
+  operationsStatus: "idle",
+  operationsError: null,
+  operations: [],
+  selectedOperation: null,
+};
 
 function reducer(state: EditSessionState, action: EditSessionAction): EditSessionState {
   switch (action.type) {
     case "UPLOAD_START":
-      return { ...state, status: "uploading", errorMessage: null };
+      return { ...initialState, status: "uploading" };
     case "UPLOAD_SUCCESS":
-      return { status: "ready", image: action.image, errorMessage: null };
+      return { ...initialState, status: "ready", image: action.image };
     case "UPLOAD_ERROR":
       return { ...state, status: "error", errorMessage: action.message };
+
+    case "ANALYZE_START":
+      return { ...state, analysisStatus: "analyzing", analysisError: null };
+    case "ANALYZE_SUCCESS":
+      return { ...state, analysisStatus: "ready", regions: action.regions };
+    case "ANALYZE_ERROR":
+      return { ...state, analysisStatus: "error", analysisError: action.message };
+
+    // Selecting a (possibly different) region always clears whatever
+    // operation catalog/selection belonged to the previous one.
+    case "SELECT_REGION":
+      return {
+        ...state,
+        selectedRegionId: action.regionId,
+        operationsStatus: "idle",
+        operationsError: null,
+        operations: [],
+        selectedOperation: null,
+      };
+    case "OPERATIONS_START":
+      return { ...state, operationsStatus: "loading", operationsError: null };
+    case "OPERATIONS_SUCCESS":
+      return { ...state, operationsStatus: "ready", operations: action.operations };
+    case "OPERATIONS_ERROR":
+      return { ...state, operationsStatus: "error", operationsError: action.message };
+
+    case "SELECT_OPERATION":
+      return { ...state, selectedOperation: action.operation };
+
     default:
       return state;
   }
@@ -39,11 +103,11 @@ interface EditSessionContextValue {
 
 const EditSessionContext = createContext<EditSessionContextValue | null>(null);
 
-/** The wizard's shared state. A linear upload -> analyze -> select ->
- * preview flow doesn't need Redux/Zustand — a Context + reducer is enough,
- * and it's the only piece of frontend/infrastructure that presentation
- * hooks reach into. `api` defaults to the real HttpImageApi but can be
- * swapped (tests, storybook) via the prop. */
+/** The wizard's shared state. A linear upload -> analyze -> select region ->
+ * select operation flow doesn't need Redux/Zustand — a Context + reducer is
+ * enough, and it's the only piece of frontend/infrastructure that
+ * presentation hooks reach into. `api` defaults to the real HttpImageApi but
+ * can be swapped (tests, storybook) via the prop. */
 export function EditSessionProvider({
   children,
   api = new HttpImageApi(),

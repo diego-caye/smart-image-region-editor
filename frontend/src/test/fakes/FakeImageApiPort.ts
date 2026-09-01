@@ -1,4 +1,5 @@
 import type { ImageApiPort, OperationCatalogEntry } from "../../application/ports/ImageApiPort";
+import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
 import type { RegionType } from "../../domain/types/RegionType";
 
@@ -13,12 +14,22 @@ export class FakeImageApiPort implements ImageApiPort {
     height: 100,
     url: "http://example.test/static/original/fake.png",
   };
+
+  analyzedImageIds: string[] = [];
+  nextAnalyzeResult: Region[] | Error = [];
+
   operationsByRegion: Partial<Record<RegionType, OperationCatalogEntry[]>> = {};
 
   async uploadImage(file: File): Promise<UploadedImage> {
     this.uploadedFiles.push(file);
     if (this.nextUploadResult instanceof Error) throw this.nextUploadResult;
     return this.nextUploadResult;
+  }
+
+  async analyzeImage(imageId: string): Promise<Region[]> {
+    this.analyzedImageIds.push(imageId);
+    if (this.nextAnalyzeResult instanceof Error) throw this.nextAnalyzeResult;
+    return this.nextAnalyzeResult;
   }
 
   async listOperationsForRegion(regionType: RegionType): Promise<OperationCatalogEntry[]> {

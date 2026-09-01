@@ -43,6 +43,42 @@ describe("HttpImageApi", () => {
     expect(init?.body).toBeInstanceOf(FormData);
   });
 
+  it("maps the backend's snake_case analyze response to domain Regions and POSTs with no body", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        image_id: "img-1",
+        regions: [
+          {
+            region_id: "r1",
+            region_type: "right_hand",
+            x: 10,
+            y: 20,
+            width: 30,
+            height: 40,
+            confidence: 0.75,
+          },
+        ],
+      }),
+    );
+
+    const api = new HttpImageApi();
+    const regions = await api.analyzeImage("img-1");
+
+    expect(regions).toEqual([
+      {
+        regionId: "r1",
+        regionType: "right_hand",
+        boundingBox: { x: 10, y: 20, width: 30, height: 40 },
+        confidence: 0.75,
+      },
+    ]);
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe("http://127.0.0.1:8420/images/img-1/analyze");
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBeUndefined();
+  });
+
   it("throws an ApiError carrying the backend's detail message on failure", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ detail: "Image not found" }, 404));
 

@@ -14,7 +14,8 @@ decisiones de diseño y su porqué.
 | 0 | Scaffolding, estructura hexagonal, git | ✅ |
 | 1–2 | Domain + Application completos, subida de imagen, persistencia (SQLite) | ✅ |
 | 3 | Detección de cara/manos (YOLOv8) + máscara precisa (SAM2), en el backend | ✅ |
-| 4 | Catálogo visual de operaciones | ✅ backend listo · falta la pantalla de selección en el frontend |
+| 3b | Frontend: overlay de regiones seleccionables + galería visual de operaciones (shadcn/ui) | ✅ |
+| 4 | Catálogo visual de operaciones | ✅ |
 | 5 | Edición localizada vía ComfyUI + composición | ⏳ pendiente |
 | 6 | Golden dataset / evaluación | ⏳ pendiente |
 | — | Despliegue en Docker (backend + frontend, GPU) | ✅ |
@@ -93,9 +94,19 @@ npm run build    # type-check + build de producción
 Por defecto apunta a `http://127.0.0.1:8420` (backend). Para cambiarlo, copia
 `.env.example` a `.env.local` y ajusta `VITE_API_BASE_URL`.
 
-Hoy el flujo cubre: subir una imagen → verla renderizada. La detección ya
-funciona en el backend (`/analyze`); falta el overlay de regiones
-seleccionables y la galería de operaciones en el frontend.
+UI construida con [shadcn/ui](https://ui.shadcn.com) (Radix + Tailwind v4) —
+componentes generados en `src/presentation/components/ui/` vía
+`npx shadcn@latest add <componente>` (el `components.json` de la raíz ya
+apunta los alias `@/presentation/...` a la estructura hexagonal del
+proyecto, no a las rutas por defecto de shadcn).
+
+Hoy el flujo cubre: subir imagen → **Analizar imagen** (detección real
+YOLOv8) → overlay de cajas seleccionables sobre la imagen (cara/mano
+izq./mano der., coloreadas) → click en una región → galería visual de
+operaciones (emoji + etiqueta, nunca texto plano) → seleccionar una →
+tarjeta de confirmación. La generación real (Qwen vía ComfyUI) todavía no
+está conectada — la tarjeta final lo indica explícitamente en vez de simular
+algo que no ocurre.
 
 ## Docker
 

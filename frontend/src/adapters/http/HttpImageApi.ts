@@ -1,4 +1,5 @@
 import type { ImageApiPort, OperationCatalogEntry } from "../../application/ports/ImageApiPort";
+import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
 import type { EditOperation } from "../../domain/types/EditOperation";
 import type { RegionType } from "../../domain/types/RegionType";
@@ -9,6 +10,21 @@ interface UploadImageResponseBody {
   width: number;
   height: number;
   url: string;
+}
+
+interface RegionResponseBody {
+  region_id: string;
+  region_type: RegionType;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  confidence: number;
+}
+
+interface AnalyzeImageResponseBody {
+  image_id: string;
+  regions: RegionResponseBody[];
 }
 
 interface OperationResponseBody {
@@ -39,6 +55,11 @@ export class HttpImageApi implements ImageApiPort {
     };
   }
 
+  async analyzeImage(imageId: string): Promise<Region[]> {
+    const body = await httpClient.post<AnalyzeImageResponseBody>(`/images/${imageId}/analyze`);
+    return body.regions.map(regionFromResponseBody);
+  }
+
   async listOperationsForRegion(regionType: RegionType): Promise<OperationCatalogEntry[]> {
     const body = await httpClient.get<ListOperationsResponseBody>(
       `/regions/${regionType}/operations`,
@@ -49,4 +70,13 @@ export class HttpImageApi implements ImageApiPort {
       emoji: op.emoji,
     }));
   }
+}
+
+function regionFromResponseBody(body: RegionResponseBody): Region {
+  return {
+    regionId: body.region_id,
+    regionType: body.region_type,
+    boundingBox: { x: body.x, y: body.y, width: body.width, height: body.height },
+    confidence: body.confidence,
+  };
 }

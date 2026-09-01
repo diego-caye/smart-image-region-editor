@@ -1,4 +1,5 @@
 import { useRef, type ChangeEvent, type DragEvent } from "react";
+import { cn } from "../lib/utils";
 
 interface ImageUploaderProps {
   onFileSelected: (file: File) => void;
@@ -23,7 +24,10 @@ export function ImageUploader({ onFileSelected, isUploading }: ImageUploaderProp
 
   return (
     <div
-      className="image-uploader"
+      className={cn(
+        "flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border bg-card px-6 py-14 text-center transition-colors",
+        "hover:border-primary focus-visible:border-primary focus-visible:outline-none",
+      )}
       onDragOver={(event) => event.preventDefault()}
       onDrop={handleDrop}
       onClick={() => inputRef.current?.click()}
@@ -38,9 +42,14 @@ export function ImageUploader({ onFileSelected, isUploading }: ImageUploaderProp
         onChange={handleChange}
         disabled={isUploading}
         data-testid="image-uploader-input"
-        style={{ display: "none" }}
+        className="hidden"
       />
-      <p>{isUploading ? "Subiendo imagen…" : "Arrastra una foto aquí o haz clic para elegirla"}</p>
+      <span className="text-3xl" aria-hidden="true">
+        📷
+      </span>
+      <p className="text-sm text-muted-foreground">
+        {isUploading ? "Subiendo imagen…" : "Arrastra una foto aquí o haz clic para elegirla"}
+      </p>
     </div>
   );
 }

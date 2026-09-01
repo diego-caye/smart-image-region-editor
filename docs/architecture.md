@@ -171,22 +171,54 @@ igual que cualquier otro adapter.
 src/
   domain/         entities (UploadedImage, Region), value-objects
                   (BoundingBox), types (RegionType, EditOperation — reflejan
-                  los enums del backend)
-  application/     use-cases (uploadImage, listOperationsForRegion, …) +
-                  ports (ImageApiPort — sin fetch)
+                  los enums del backend, sin metadata de presentación)
+  application/     use-cases (uploadImage, analyzeImage,
+                  listOperationsForRegion, …) + ports (ImageApiPort — sin
+                  fetch)
   adapters/        http/HttpImageApi (implementa ImageApiPort, el único
                   módulo que conoce el JSON snake_case del backend) +
-                  ui/ (mappers de presentación, p. ej. región → color)
+                  ui/regionPresentation.ts (región → label/color; separado
+                  del type puro en domain/types)
   infrastructure/  api/httpClient (el único lugar que conoce la URL base y
                   maneja errores HTTP) + state/EditSessionContext (Context +
                   reducer — suficiente para un flujo lineal, sin Redux)
-  presentation/    components/ (ImageUploader, …) + pages/ (EditorPage) +
+  presentation/    components/ (ImageUploader, RegionOverlay,
+                  OperationGallery, ui/ — primitivas shadcn) + lib/utils.ts
+                  (cn(), generado por shadcn) + pages/ (EditorPage) +
                   hooks/useEditSession (lo único que los componentes llaman)
 ```
 
 Regla reforzada por la estructura: componente → hook → caso de uso →
 port → adapter (`adapters/http`, usando `infrastructure/api`). Ningún
 componente importa `fetch` ni conoce una ruta del backend directamente.
+
+### shadcn/ui
+
+Componentes generados con `npx shadcn@latest add <nombre>` (Radix +
+Tailwind v4, estilo "Nova"). `components.json` (raíz de `frontend/`) tiene
+sus `aliases` reconfigurados para que caigan dentro de la estructura
+hexagonal en vez de las rutas por defecto de shadcn:
+
+```json
+"aliases": {
+  "components": "@/presentation/components",
+  "utils": "@/presentation/lib/utils",
+  "ui": "@/presentation/components/ui",
+  "lib": "@/presentation/lib",
+  "hooks": "@/presentation/hooks"
+}
+```
+
+`RegionOverlay` (cajas coloreadas y clicables sobre la imagen,
+posicionadas en porcentaje respecto a `imageWidth`/`imageHeight` — se
+mantienen alineadas a cualquier tamaño de render sin `ResizeObserver`) y
+`OperationGallery` (grid de `Card` con emoji + etiqueta, nunca texto plano)
+son componentes propios sobre las primitivas de `presentation/components/ui/`.
+Verificados visualmente extremo a extremo (Playwright headless contra el
+stack real en Docker: subir foto real → `Analizar imagen` → cajas de
+región correctamente alineadas sobre cara/mano-izq./mano-der. → clic en una
+región → galería con emoji reales del backend → clic en una operación →
+tarjeta de confirmación).
 
 ## Testing
 
@@ -207,7 +239,10 @@ componente importa `fetch` ni conoce una ruta del backend directamente.
   por defecto (`addopts` en `pyproject.toml` los excluye) porque necesita la
   extra `ml` instalada y los pesos en disco.
 - `frontend/src/**/*.test.{ts,tsx}` — `HttpImageApi` con `fetch` mockeado,
-  `EditorPage` con un `FakeImageApiPort` inyectado en el Context.
+  `EditorPage` con un `FakeImageApiPort` inyectado en el Context (cubre el
+  flujo completo: subir → analizar → seleccionar región → seleccionar
+  operación, incluyendo que cambiar de región limpia la operación
+  seleccionada previamente).
 
 ## Docker
 
@@ -249,15 +284,15 @@ distinto):
 1. **Edición localizada** (`infrastructure/image_editing/comfyui`,
    `adapters/image_editing`, `adapters/imaging`): cliente ComfyUI real,
    plantilla de workflow API-format basada en `TextEncodeQwenImageEditPlus`
-   + `InpaintModelConditioning`, y `PillowImageCompositor`.
-2. **Frontend**: overlay de regiones seleccionables sobre la imagen
-   (`RegionOverlay`) y la galería visual de operaciones (`OperationGallery`)
-   — el backend de ambos (`/analyze`, `/regions/{tipo}/operations`) ya
-   existe y está probado.
-3. **Boca/Ojos**: `RegionType` y el catálogo de operaciones ya los
+   + `InpaintModelConditioning`, y `PillowImageCompositor`. El frontend ya
+   tiene la tarjeta "3. Vista previa" lista y esperando (hoy muestra un
+   placeholder honesto en vez de simular una generación); falta conectar el
+   botón "Generar vista previa" a `POST /images/{id}/edits` una vez ese
+   endpoint exista.
+2. **Boca/Ojos**: `RegionType` y el catálogo de operaciones ya los
    contemplan; falta conectar un detector (candidato:
    `MediaPipeFaceLandmarker`, ya instalado en ComfyUI, o su equivalente en
    `mediapipe` directamente en el backend).
-4. **Golden dataset**: `tests/evaluation/{datasets,evaluators}` con
+3. **Golden dataset**: `tests/evaluation/{datasets,evaluators}` con
    `region_preservation.py` real (diff numpy/PIL fuera de la máscara);
    `edit_quality`/`identity_preservation` como interfaces documentadas.

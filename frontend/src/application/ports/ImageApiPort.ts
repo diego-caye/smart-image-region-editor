@@ -1,3 +1,4 @@
+import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
 import type { EditOperation } from "../../domain/types/EditOperation";
 import type { RegionType } from "../../domain/types/RegionType";
@@ -16,5 +17,6 @@ export interface OperationCatalogEntry {
  */
 export interface ImageApiPort {
   uploadImage(file: File): Promise<UploadedImage>;
+  analyzeImage(imageId: string): Promise<Region[]>;
   listOperationsForRegion(regionType: RegionType): Promise<OperationCatalogEntry[]>;
 }
