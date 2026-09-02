@@ -308,6 +308,17 @@ tarjeta de confirmación).
   (`pytest -m live_comfyui`), contra el ComfyUI + Qwen Image Edit reales.
   Ninguno de los dos corre por defecto (`addopts` en `pyproject.toml` los
   excluye).
+- `backend/tests/evaluation/` — golden dataset. `evaluators/region_preservation.py`
+  es real (diff numpy fuera de la máscara, con sus propios tests sintéticos
+  en `test_region_preservation_evaluator.py`); `evaluators/edit_quality.py` e
+  `identity_preservation.py` son stubs documentados que fallan a propósito
+  con `NotImplementedError` (probado en `test_stub_evaluators.py`) en vez de
+  devolver un resultado sin sentido. `test_golden_dataset.py` (opt-in,
+  `pytest -m live_comfyui`) corre cada entrada de `datasets/golden_*.json`
+  por el pipeline real; con los datasets vacíos (a propósito — ver
+  `datasets/README.md`, no se suben fotos reales sin consentimiento)
+  colecciona como un único test "skipped: got empty parameter set", no como
+  ausente — el mecanismo ya está probado, solo falta poblarlo.
 - `frontend/src/**/*.test.{ts,tsx}` — `HttpImageApi` con `fetch` mockeado
   (incluye `requestEdit`/`confirmEdit`/`discardEdit`), `EditorPage` con un
   `FakeImageApiPort` inyectado en el Context (cubre el flujo completo:
@@ -357,15 +368,19 @@ distinto):
    contemplan; falta conectar un detector (candidato:
    `MediaPipeFaceLandmarker`, ya instalado en ComfyUI, o su equivalente en
    `mediapipe` directamente en el backend).
-2. **Golden dataset**: `tests/evaluation/{datasets,evaluators}` con
-   `region_preservation.py` real (diff numpy/PIL fuera de la máscara);
-   `edit_quality`/`identity_preservation` como interfaces documentadas.
-3. **Afinar la máscara crecida**: `DEFAULT_MASK_GROW_PX=40` es un valor
+2. **Poblar el golden dataset**: el esquema, el runner y el evaluador
+   (`region_preservation`) ya están listos y probados; falta añadir fotos
+   reales localmente (`datasets/images/`, gitignored) y sus entradas en
+   `datasets/golden_*.json` — ver `datasets/README.md`.
+3. **`edit_quality` / `identity_preservation`**: implementar los stubs — un
+   juez VLM/CLIP contra el prompt de la operación para el primero, un
+   modelo de embeddings faciales para el segundo (ver sus docstrings).
+4. **Afinar la máscara crecida**: `DEFAULT_MASK_GROW_PX=40` es un valor
    único para todo tipo de región; un valor por `RegionType` (o por
    `EditOperation`, ya que "puño→paz" necesita más margen que "sonrisa
    cerrada→sonrisa") daría mejores bordes sin crecer de más regiones que no
    lo necesitan.
-4. **Imagen de referencia por gesto**: el Port `ImageEditor.edit()` ya
+5. **Imagen de referencia por gesto**: el Port `ImageEditor.edit()` ya
    acepta `reference_image_png_bytes` y el workflow ya tiene los campos
    `image2`/`image3` de `TextEncodeQwenImageEditPlus` disponibles — hoy no
    se usan porque el prompt de texto solo ya da buenos resultados.

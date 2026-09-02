@@ -17,8 +17,9 @@ decisiones de diseño y su porqué.
 | 3b | Frontend: overlay de regiones seleccionables + galería visual de operaciones (shadcn/ui) | ✅ |
 | 4 | Catálogo visual de operaciones | ✅ |
 | 5 | Edición localizada vía ComfyUI + composición, extremo a extremo (backend + frontend) | ✅ |
-| 6 | Golden dataset / evaluación | ⏳ pendiente |
+| 6 | Golden dataset / evaluación | ✅ andamiaje + `region_preservation` real · `edit_quality`/`identity_preservation` son stubs documentados |
 | — | Despliegue en Docker (backend + frontend, GPU) | ✅ |
+| — | Extender a boca/ojos/cuerpo | ⏳ pendiente (siguiente paso natural) |
 
 Todo lo que está "✅" tiene tests (unitarios + integración) en verde y fue
 verificado además contra procesos reales corriendo (`uvicorn`/`docker
@@ -87,6 +88,24 @@ Endpoints disponibles hoy:
   original.
 - `POST /edits/{id}/discard` — descarta el preview, la sesión no cambia.
 - `GET /static/{storage_ref}` — sirve los bytes de una imagen guardada.
+
+### Golden dataset / evaluación
+
+`backend/tests/evaluation/`:
+
+- `evaluators/region_preservation.py` — real: mide en píxeles si todo lo de
+  fuera de la máscara quedó igual entre el original y el final. Tiene sus
+  propios tests unitarios (sintéticos, sin GPU) y el runner del golden
+  dataset lo usa contra ediciones reales.
+- `evaluators/edit_quality.py`, `evaluators/identity_preservation.py` —
+  stubs documentados (`NotImplementedError` con el enfoque previsto en el
+  docstring), no bloquean el MVP.
+- `datasets/golden_{hand,face,mouth}_edits.json` — vacíos a propósito: el
+  esquema y el runner (`test_golden_dataset.py`, opt-in vía
+  `pytest -m live_comfyui`) están listos, pero las fotos reales para
+  poblarlos no se suben al repo sin consentimiento — ver
+  `datasets/README.md` para el esquema y cómo añadir las tuyas localmente
+  (`datasets/images/`, ya en `.gitignore`).
 
 ## Frontend (nativo)
 

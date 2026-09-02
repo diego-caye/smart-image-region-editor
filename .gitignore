@@ -20,6 +20,9 @@ backend/htmlcov/
 backend/.coverage
 backend/.env
 backend/models_cache/
+# Real photos for the golden dataset — added locally, never committed
+# (consent is the depositor's call). See tests/evaluation/datasets/README.md.
+backend/tests/evaluation/datasets/images/
 
 # --- Frontend (Node) ---
 frontend/node_modules/
