@@ -1,6 +1,12 @@
-import type { ImageApiPort, OperationCatalogEntry } from "../../application/ports/ImageApiPort";
+import type {
+  ConfirmEditResult,
+  EditGenerationResult,
+  ImageApiPort,
+  OperationCatalogEntry,
+} from "../../application/ports/ImageApiPort";
 import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
+import type { EditOperation } from "../../domain/types/EditOperation";
 import type { RegionType } from "../../domain/types/RegionType";
 
 /** In-memory ImageApiPort double for component/hook tests — no fetch, no
@@ -20,6 +26,23 @@ export class FakeImageApiPort implements ImageApiPort {
 
   operationsByRegion: Partial<Record<RegionType, OperationCatalogEntry[]>> = {};
 
+  requestedEdits: { imageId: string; regionId: string; operation: EditOperation }[] = [];
+  nextEditResult: EditGenerationResult | Error = {
+    editId: "fake-edit-id",
+    status: "preview_ready",
+    previewUrl: "http://example.test/static/preview/fake.png",
+    errorMessage: null,
+  };
+
+  confirmedEditIds: string[] = [];
+  nextConfirmResult: ConfirmEditResult | Error = {
+    editId: "fake-edit-id",
+    finalUrl: "http://example.test/static/preview/fake.png",
+  };
+
+  discardedEditIds: string[] = [];
+  nextDiscardError: Error | null = null;
+
   async uploadImage(file: File): Promise<UploadedImage> {
     this.uploadedFiles.push(file);
     if (this.nextUploadResult instanceof Error) throw this.nextUploadResult;
@@ -34,5 +57,26 @@ export class FakeImageApiPort implements ImageApiPort {
 
   async listOperationsForRegion(regionType: RegionType): Promise<OperationCatalogEntry[]> {
     return this.operationsByRegion[regionType] ?? [];
+  }
+
+  async requestEdit(
+    imageId: string,
+    regionId: string,
+    operation: EditOperation,
+  ): Promise<EditGenerationResult> {
+    this.requestedEdits.push({ imageId, regionId, operation });
+    if (this.nextEditResult instanceof Error) throw this.nextEditResult;
+    return this.nextEditResult;
+  }
+
+  async confirmEdit(editId: string): Promise<ConfirmEditResult> {
+    this.confirmedEditIds.push(editId);
+    if (this.nextConfirmResult instanceof Error) throw this.nextConfirmResult;
+    return this.nextConfirmResult;
+  }
+
+  async discardEdit(editId: string): Promise<void> {
+    this.discardedEditIds.push(editId);
+    if (this.nextDiscardError) throw this.nextDiscardError;
   }
 }

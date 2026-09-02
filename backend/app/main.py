@@ -3,7 +3,12 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.adapters.http.controllers import images_controller, operations_controller, static_files_controller
+from app.adapters.http.controllers import (
+    edits_controller,
+    images_controller,
+    operations_controller,
+    static_files_controller,
+)
 from app.infrastructure.config.settings import get_settings
 from app.infrastructure.database.engine import init_db, make_engine
 
@@ -25,6 +30,8 @@ def create_app() -> FastAPI:
 
     app.include_router(images_controller.router)
     app.include_router(operations_controller.router)
+    app.include_router(edits_controller.images_edits_router)
+    app.include_router(edits_controller.edits_router)
     app.include_router(static_files_controller.router)
 
     @app.get("/health", tags=["meta"])

@@ -14,10 +14,15 @@ from sqlmodel import Session
 
 from app.adapters.persistence.sqlalchemy_image_repository import SqlAlchemyImageRepository
 from app.application.use_cases.analyze_image import AnalyzeImageUseCase
+from app.application.use_cases.confirm_edit import ConfirmEditUseCase
+from app.application.use_cases.discard_edit import DiscardEditUseCase
+from app.application.use_cases.edit_region import EditRegionUseCase
 from app.application.use_cases.get_detected_regions import GetDetectedRegionsUseCase
 from app.application.use_cases.list_operations_for_region import ListOperationsForRegionUseCase
 from app.application.use_cases.upload_image import UploadImageUseCase
+from app.domain.ports.image_compositor import ImageCompositor
 from app.domain.ports.image_detector import ImageDetector
+from app.domain.ports.image_editor import ImageEditor
 from app.domain.ports.image_repository import ImageRepository
 from app.domain.ports.image_segmenter import ImageSegmenter
 from app.domain.ports.image_storage import ImageStorage
@@ -100,10 +105,9 @@ def get_get_detected_regions_use_case(
 
 @lru_cache
 def get_image_segmenter() -> ImageSegmenter:
-    # Not wired to any HTTP endpoint yet (segmentation is lazy — only
-    # EditRegionUseCase, landing in the Qwen-editing phase, actually needs
-    # it) but built and verified now, alongside detection, since both share
-    # the same GPU/device-management concerns.
+    # Segmentation is lazy (only EditRegionUseCase needs it, and only once
+    # per region — see _get_or_create_mask), but the model is loaded once
+    # per process either way.
     from app.adapters.vision.sam2_image_segmenter import Sam2ImageSegmenter
     from app.infrastructure.vision.device import resolve_device
     from app.infrastructure.vision.sam2_segmenter import Sam2MaskPredictor
@@ -115,3 +119,61 @@ def get_image_segmenter() -> ImageSegmenter:
         cache_dir=settings.models_cache_dir,
     )
     return Sam2ImageSegmenter(predictor)
+
+
+@lru_cache
+def get_image_editor() -> ImageEditor:
+    from app.adapters.image_editing.comfyui_image_editor import ComfyUIImageEditor
+    from app.infrastructure.image_editing.comfyui.client import ComfyUIClient
+
+    settings = get_settings()
+    client = ComfyUIClient(
+        settings.comfyui_base_url,
+        poll_interval_seconds=settings.comfyui_poll_interval_seconds,
+        timeout_seconds=settings.comfyui_timeout_seconds,
+    )
+    return ComfyUIImageEditor(
+        client,
+        crop_context_margin_px=settings.edit_crop_context_margin_px,
+        unet_name=settings.qwen_unet_name,
+        clip_name=settings.qwen_clip_name,
+        vae_name=settings.qwen_vae_name,
+        lora_name=settings.qwen_lora_name,
+        lora_strength=settings.qwen_lora_strength,
+        model_shift=settings.qwen_model_shift,
+        cfg_norm_strength=settings.qwen_cfg_norm_strength,
+        steps=settings.qwen_steps,
+        cfg=settings.qwen_cfg,
+        sampler_name=settings.qwen_sampler_name,
+        scheduler=settings.qwen_scheduler,
+    )
+
+
+@lru_cache
+def get_image_compositor() -> ImageCompositor:
+    from app.adapters.imaging.pillow_image_compositor import PillowImageCompositor
+
+    return PillowImageCompositor()
+
+
+def get_edit_region_use_case(
+    repo: ImageRepository = Depends(get_image_repository),
+    storage: ImageStorage = Depends(get_image_storage),
+    segmenter: ImageSegmenter = Depends(get_image_segmenter),
+    editor: ImageEditor = Depends(get_image_editor),
+    compositor: ImageCompositor = Depends(get_image_compositor),
+) -> EditRegionUseCase:
+    return EditRegionUseCase(repo, storage, segmenter, editor, compositor)
+
+
+def get_confirm_edit_use_case(
+    repo: ImageRepository = Depends(get_image_repository),
+    storage: ImageStorage = Depends(get_image_storage),
+) -> ConfirmEditUseCase:
+    return ConfirmEditUseCase(repo, storage)
+
+
+def get_discard_edit_use_case(
+    repo: ImageRepository = Depends(get_image_repository),
+) -> DiscardEditUseCase:
+    return DiscardEditUseCase(repo)

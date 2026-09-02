@@ -39,15 +39,18 @@ app/
                        dominio ↔ tablas SQLModel
     vision/              YoloImageDetector, Sam2ImageSegmenter — traducen
                        salida cruda de YOLO/SAM2 a DetectedRegion/Mask
-    image_editing/        (Fase 5) ComfyUIImageEditor — traduce EditOperation
-                       a un workflow de ComfyUI
-    imaging/              (Fase 5) PillowImageCompositor
+    image_editing/         ComfyUIImageEditor — sube el crop, corre el
+                       workflow, reescala la salida al tamaño del crop
+    imaging/               PillowImageCompositor — crece/difumina la
+                       máscara y compone; es quien garantiza "sin costuras"
   infrastructure/
     vision/               device.py, model_registry.py, YoloDetector,
                        Sam2MaskPredictor — wrappers crudos de
                        Ultralytics/SAM2, sin saber nada de Domain
-    image_editing/comfyui/ (Fase 5) cliente HTTP/WS real de ComfyUI +
-                       plantillas de workflow + tabla operación→prompt
+    image_editing/comfyui/ client.py (HTTP real, sin WS — polling sobre
+                       /history), workflow.py (carga la plantilla JSON y
+                       sustituye parámetros), workflows/qwen_edit.json,
+                       operation_prompts.py (EditOperation → instrucción)
     storage/              FilesystemImageStorage
     database/             engine, modelos SQLModel, init_db
     config/               settings.py — única fuente de variables de entorno
@@ -142,10 +145,63 @@ GET  /ws?clientId=…        progreso en tiempo real (opcional; el cliente
 
 Modelos ya instalados y confirmados en disco: `qwen_image_edit_2511_fp8mixed.safetensors`
 + LoRA Lightning de 4 pasos + `qwen_2.5_vl_7b_fp8_scaled` (encoder) +
-`qwen_image_vae`. Nodos relevantes verificados vía `/object_info`:
-`TextEncodeQwenImageEditPlus`, `InpaintModelConditioning`,
-`VAEEncodeForInpaint`, `GrowMask`, `FeatherMask`, `ImageCropByMaskAndResize`,
-`ImageCompositeMasked`.
+`qwen_image_vae`.
+
+### El grafo de edición — por qué NO usa nodos de inpainting
+
+`infrastructure/image_editing/comfyui/workflows/qwen_edit.json` es el
+workflow real (formato API, verificado nodo por nodo contra `/object_info`
+y contra la ejecución real, no adivinado): `LoadImage` →
+`FluxKontextImageScale` → (`TextEncodeQwenImageEditPlus` × 2,
+positivo/negativo, cada uno seguido de `FluxKontextMultiReferenceLatentMethod`)
++ `VAEEncode` → `UNETLoader` → `ModelSamplingAuraFlow` → `CFGNorm` →
+`LoraLoaderModelOnly` (LoRA Lightning 4 pasos) → `KSampler` → `VAEDecode` →
+`SaveImage`. Es el mismo grafo que el workflow de referencia que trae el
+propio checkpoint (`image_qwen_image_edit_2511.json`), sin las ramas de
+imagen2/imagen3 (reservadas para una futura imagen de referencia por
+gesto).
+
+Deliberadamente **no** usa `InpaintModelConditioning`/`VAEEncodeForInpaint`
+(nodos de inpainting clásico): Qwen Image Edit es un editor por
+instrucciones, no una UNet con canal de máscara dedicado — la imagen de
+referencia se inyecta vía el *text encoder* (`TextEncodeQwenImageEditPlus`),
+no vía una máscara en el grafo. `ComfyUIImageEditor` le manda a ComfyUI el
+**crop completo** (región + margen de contexto, sin máscara) con la
+instrucción en texto, y dejar que Qwen edite todo el crop; la máscara nunca
+entra al grafo de ComfyUI. Quien impone "solo cambia lo seleccionado" es
+`PillowImageCompositor`, después, con la máscara real — exactamente la regla
+que pedía el enunciado original ("no asumir que Qwen preservará el resto
+por sí solo").
+
+### Máscara: por qué hay que *crecer* la máscara antes de componer
+
+Primer intento en vivo: mano cerrada → "señal de paz". Resultado: dedos
+"fantasma", semitransparentes, en vez de un gesto limpio. Causa: la máscara
+de SAM2 sigue el contorno del **puño original**; los dedos extendidos del
+nuevo gesto caen fuera de ese contorno, así que la composición los recorta
+(o los deja a medias por el difuminado del borde). `Mask.grow_px` ya existía
+en la entidad pero no se aplicaba a ningún píxel — era metadata muerta.
+
+Arreglo: `ImageCompositor.composite()` ahora recibe `grow_px` y
+`PillowImageCompositor` dilata la máscara (`ImageFilter.MaxFilter`) antes de
+difuminarla (`GaussianBlur`). `EditRegionUseCase` usa
+`DEFAULT_MASK_GROW_PX = 40` (antes 8) — generoso a propósito, porque una
+edición puede cambiar la silueta de la región (un puño abriéndose en mano
+extendida ocupa más espacio que el puño). Verificado: el mismo caso (puño →
+paz) con el fix da un gesto limpio, sin fantasmas; la mano izquierda, la
+cara, el pelo y la ropa quedan intactos. Queda un ligero suavizado residual
+donde la mano cruza mechones de pelo — aceptable para el MVP, ajustable
+subiendo `grow_px` u otro enfoque (máscara consciente de bordes) si hace
+falta más adelante.
+
+### Resolución: la salida de Qwen no es del tamaño del crop
+
+Qwen Image Edit devuelve la imagen en su propia resolución preferida, no
+necesariamente la del crop enviado. `ComfyUIImageEditor` reescala el
+resultado de vuelta al tamaño exacto de `region_box_used` (Lanczos) antes de
+devolverlo — así `PillowImageCompositor` nunca necesita saber nada sobre la
+resolución interna del modelo, solo trabaja con píxeles que ya coinciden
+con la máscara recortada.
 
 ### Persistencia
 
@@ -234,15 +290,31 @@ tarjeta de confirmación).
   izquierda/derecha, traducción a `DetectedRegion`) contra dobles de prueba
   con la misma interfaz que `YoloDetector`; nada de torch/ultralytics real,
   corre en milisegundos.
+- `backend/tests/unit/adapters/test_pillow_image_compositor.py` — la
+  garantía "fuera de la máscara, todo igual" a nivel de píxel (numpy), y el
+  caso concreto que reprodujo el bug real de los "dedos fantasma"
+  (máscara sin crecer vs. creciéndola).
+- `backend/tests/unit/infrastructure/` — la plantilla del workflow Qwen
+  (sustitución de placeholders, números vs strings, referencias de nodo
+  válidas) y que cada `EditOperation` tiene un prompt.
+- `backend/tests/integration/test_edits_api.py` — `/images/{id}/edits`,
+  `/edits/{id}/confirm|discard` vía `TestClient`, con los mismos fakes de
+  detector/segmentador/editor que los tests de aplicación más el
+  `PillowImageCompositor` real (rápido, sin GPU) para cobertura genuina de
+  la composición de píxeles.
 - `backend/tests/integration/test_vision_live.py` — opt-in
-  (`pytest -m live_models`), contra los modelos YOLO/SAM2 reales. No corre
-  por defecto (`addopts` en `pyproject.toml` los excluye) porque necesita la
-  extra `ml` instalada y los pesos en disco.
-- `frontend/src/**/*.test.{ts,tsx}` — `HttpImageApi` con `fetch` mockeado,
-  `EditorPage` con un `FakeImageApiPort` inyectado en el Context (cubre el
-  flujo completo: subir → analizar → seleccionar región → seleccionar
-  operación, incluyendo que cambiar de región limpia la operación
-  seleccionada previamente).
+  (`pytest -m live_models`), contra los modelos YOLO/SAM2 reales.
+- `backend/tests/integration/test_comfyui_edit_live.py` — opt-in
+  (`pytest -m live_comfyui`), contra el ComfyUI + Qwen Image Edit reales.
+  Ninguno de los dos corre por defecto (`addopts` en `pyproject.toml` los
+  excluye).
+- `frontend/src/**/*.test.{ts,tsx}` — `HttpImageApi` con `fetch` mockeado
+  (incluye `requestEdit`/`confirmEdit`/`discardEdit`), `EditorPage` con un
+  `FakeImageApiPort` inyectado en el Context (cubre el flujo completo:
+  subir → analizar → seleccionar región → seleccionar operación → generar
+  vista previa → aceptar/descartar, incluyendo que cambiar de región u
+  operación limpia cualquier vista previa anterior, y que aceptar actualiza
+  la imagen mostrada y deja la región lista para una segunda edición).
 
 ## Docker
 
@@ -281,18 +353,19 @@ distinto):
 
 ## Próximos pasos (no implementados todavía)
 
-1. **Edición localizada** (`infrastructure/image_editing/comfyui`,
-   `adapters/image_editing`, `adapters/imaging`): cliente ComfyUI real,
-   plantilla de workflow API-format basada en `TextEncodeQwenImageEditPlus`
-   + `InpaintModelConditioning`, y `PillowImageCompositor`. El frontend ya
-   tiene la tarjeta "3. Vista previa" lista y esperando (hoy muestra un
-   placeholder honesto en vez de simular una generación); falta conectar el
-   botón "Generar vista previa" a `POST /images/{id}/edits` una vez ese
-   endpoint exista.
-2. **Boca/Ojos**: `RegionType` y el catálogo de operaciones ya los
+1. **Boca/Ojos**: `RegionType` y el catálogo de operaciones ya los
    contemplan; falta conectar un detector (candidato:
    `MediaPipeFaceLandmarker`, ya instalado en ComfyUI, o su equivalente en
    `mediapipe` directamente en el backend).
-3. **Golden dataset**: `tests/evaluation/{datasets,evaluators}` con
+2. **Golden dataset**: `tests/evaluation/{datasets,evaluators}` con
    `region_preservation.py` real (diff numpy/PIL fuera de la máscara);
    `edit_quality`/`identity_preservation` como interfaces documentadas.
+3. **Afinar la máscara crecida**: `DEFAULT_MASK_GROW_PX=40` es un valor
+   único para todo tipo de región; un valor por `RegionType` (o por
+   `EditOperation`, ya que "puño→paz" necesita más margen que "sonrisa
+   cerrada→sonrisa") daría mejores bordes sin crecer de más regiones que no
+   lo necesitan.
+4. **Imagen de referencia por gesto**: el Port `ImageEditor.edit()` ya
+   acepta `reference_image_png_bytes` y el workflow ya tiene los campos
+   `image2`/`image3` de `TextEncodeQwenImageEditPlus` disponibles — hoy no
+   se usan porque el prompt de texto solo ya da buenos resultados.

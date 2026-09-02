@@ -9,8 +9,8 @@ backend/__pycache__/
 backend/data/app.db
 backend/data/app.db-*
 backend/data/images/original/*
-backend/data/images/masks/*
-backend/data/images/previews/*
+backend/data/images/mask/*
+backend/data/images/preview/*
 backend/data/images/final/*
 !backend/data/images/**/.gitkeep
 backend/.pytest_cache/

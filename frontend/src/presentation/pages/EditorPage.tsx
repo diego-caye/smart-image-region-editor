@@ -1,6 +1,7 @@
 import { REGION_LABELS } from "../../adapters/ui/regionPresentation";
 import { ImageUploader } from "../components/ImageUploader";
 import { OperationGallery } from "../components/OperationGallery";
+import { PreviewComparison } from "../components/PreviewComparison";
 import { RegionOverlay } from "../components/RegionOverlay";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -13,6 +14,7 @@ export function EditorPage() {
     status,
     image,
     errorMessage,
+    currentImageUrl,
     analysisStatus,
     analysisError,
     regions,
@@ -21,13 +23,22 @@ export function EditorPage() {
     operationsError,
     operations,
     selectedOperation,
+    editGenerationStatus,
+    editError,
+    editBeforeUrl,
+    previewUrl,
+    editConfirmStatus,
     upload,
     analyze,
     selectRegion,
     selectOperation,
+    requestEdit,
+    confirmEdit,
+    discardEdit,
   } = useEditSession();
 
   const selectedRegion = regions.find((r) => r.regionId === selectedRegionId) ?? null;
+  const selectedOperationEntry = operations.find((op) => op.operation === selectedOperation) ?? null;
 
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-10">
@@ -48,7 +59,7 @@ export function EditorPage() {
         </p>
       )}
 
-      {image && (
+      {image && currentImageUrl && (
         <Card>
           <CardHeader>
             <CardTitle>1. Imagen</CardTitle>
@@ -58,7 +69,7 @@ export function EditorPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <RegionOverlay
-              imageUrl={image.url}
+              imageUrl={currentImageUrl}
               imageWidth={image.width}
               imageHeight={image.height}
               regions={regions}
@@ -130,23 +141,46 @@ export function EditorPage() {
         </Card>
       )}
 
-      {selectedOperation && selectedRegion && (
+      {selectedRegion && selectedOperationEntry && (
         <Card>
           <CardHeader>
             <CardTitle>3. Vista previa</CardTitle>
             <CardDescription>
-              {REGION_LABELS[selectedRegion.regionType]} →{" "}
-              {operations.find((op) => op.operation === selectedOperation)?.label}
+              {REGION_LABELS[selectedRegion.regionType]} → {selectedOperationEntry.label}
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              La edición localizada con Qwen (vía ComfyUI) todavía no está conectada — esta
-              selección queda lista para cuando lo esté.
-            </p>
-            <Button disabled className="mt-3">
-              Generar vista previa
-            </Button>
+          <CardContent className="flex flex-col gap-3">
+            {editGenerationStatus === "idle" && (
+              <Button onClick={requestEdit} className="self-start">
+                Generar vista previa
+              </Button>
+            )}
+            {editGenerationStatus === "generating" && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Skeleton className="h-4 w-4 rounded-full" />
+                Generando con Qwen (vía ComfyUI)… esto puede tardar unos 20-30 segundos.
+              </div>
+            )}
+            {editGenerationStatus === "error" && (
+              <div className="flex flex-col gap-2">
+                <p role="alert" className="text-sm text-destructive">
+                  {editError}
+                </p>
+                <Button onClick={requestEdit} variant="outline" className="self-start">
+                  Reintentar
+                </Button>
+              </div>
+            )}
+            {editGenerationStatus === "ready" && previewUrl && editBeforeUrl && (
+              <PreviewComparison
+                beforeUrl={editBeforeUrl}
+                afterUrl={previewUrl}
+                onAccept={confirmEdit}
+                onDiscard={discardEdit}
+                isConfirming={editConfirmStatus === "confirming"}
+                isDiscarding={editConfirmStatus === "discarding"}
+              />
+            )}
           </CardContent>
         </Card>
       )}

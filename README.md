@@ -16,7 +16,7 @@ decisiones de diseño y su porqué.
 | 3 | Detección de cara/manos (YOLOv8) + máscara precisa (SAM2), en el backend | ✅ |
 | 3b | Frontend: overlay de regiones seleccionables + galería visual de operaciones (shadcn/ui) | ✅ |
 | 4 | Catálogo visual de operaciones | ✅ |
-| 5 | Edición localizada vía ComfyUI + composición | ⏳ pendiente |
+| 5 | Edición localizada vía ComfyUI + composición, extremo a extremo (backend + frontend) | ✅ |
 | 6 | Golden dataset / evaluación | ⏳ pendiente |
 | — | Despliegue en Docker (backend + frontend, GPU) | ✅ |
 
@@ -68,7 +68,7 @@ copy .env.example .env          # y ajusta si hace falta
 - Tests: `./.venv/Scripts/pytest` — rápidos, no requieren GPU/modelos/ComfyUI
   por defecto. Para correr también los que sí los requieren:
   `./.venv/Scripts/pytest -m live_models` (YOLO+SAM2 reales) o
-  `-m live_comfyui` (cuando exista, Fase 5).
+  `./.venv/Scripts/pytest -m live_comfyui` (Qwen Image Edit real).
 
 Endpoints disponibles hoy:
 
@@ -77,9 +77,16 @@ Endpoints disponibles hoy:
 - `POST /images/{id}/analyze` — corre detección real (YOLOv8 cara+manos) y
   persiste las regiones encontradas.
 - `GET /images/{id}/regions` — relee las regiones ya detectadas.
-- `GET /static/{storage_ref}` — sirve los bytes de una imagen guardada.
 - `GET /regions/{region_type}/operations` — catálogo de operaciones válidas
   para un tipo de región (p. ej. `right_hand` → saludar/paz/pulgar/puño).
+- `POST /images/{id}/edits` — `{region_id, operation}` → edición localizada
+  real (SAM2 + Qwen Image Edit vía ComfyUI + composición), devuelve un
+  preview sin tocar la imagen "oficial" todavía. ~25-30s por edición.
+- `POST /edits/{id}/confirm` — el preview pasa a ser la imagen actual de la
+  sesión; la siguiente edición se aplica sobre este resultado, no sobre el
+  original.
+- `POST /edits/{id}/discard` — descarta el preview, la sesión no cambia.
+- `GET /static/{storage_ref}` — sirve los bytes de una imagen guardada.
 
 ## Frontend (nativo)
 
@@ -100,13 +107,15 @@ componentes generados en `src/presentation/components/ui/` vía
 apunta los alias `@/presentation/...` a la estructura hexagonal del
 proyecto, no a las rutas por defecto de shadcn).
 
-Hoy el flujo cubre: subir imagen → **Analizar imagen** (detección real
-YOLOv8) → overlay de cajas seleccionables sobre la imagen (cara/mano
-izq./mano der., coloreadas) → click en una región → galería visual de
-operaciones (emoji + etiqueta, nunca texto plano) → seleccionar una →
-tarjeta de confirmación. La generación real (Qwen vía ComfyUI) todavía no
-está conectada — la tarjeta final lo indica explícitamente en vez de simular
-algo que no ocurre.
+El flujo completo funciona extremo a extremo: subir imagen → **Analizar
+imagen** (detección real YOLOv8) → overlay de cajas seleccionables sobre la
+imagen (cara/mano izq./mano der., coloreadas) → click en una región →
+galería visual de operaciones (emoji + etiqueta, nunca texto plano) →
+seleccionar una → **Generar vista previa** (SAM2 + Qwen Image Edit real vía
+ComfyUI, ~25-30s) → comparación Antes/Después → **Aceptar** (la imagen de la
+sesión avanza; una segunda edición se aplica sobre este resultado, no sobre
+el original — mano derecha→paz y mano izquierda→pulgar arriba conviven en la
+misma foto) o **Descartar** (sin cambios).
 
 ## Docker
 

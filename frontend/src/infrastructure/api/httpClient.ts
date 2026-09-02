@@ -41,6 +41,12 @@ async function safeReadDetail(response: Response): Promise<string | null> {
 export const httpClient = {
   get: <T>(path: string): Promise<T> => request<T>(path),
   post: <T>(path: string): Promise<T> => request<T>(path, { method: "POST" }),
+  postJson: <T>(path: string, body: unknown): Promise<T> =>
+    request<T>(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
   postForm: <T>(path: string, form: FormData): Promise<T> =>
     request<T>(path, { method: "POST", body: form }),
 };

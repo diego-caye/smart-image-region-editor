@@ -15,8 +15,11 @@ from app.domain.services.region_operation_rules import ensure_operation_allowed
 if TYPE_CHECKING:
     from app.domain.entities.region import DetectedRegion
 
-DEFAULT_CROP_CONTEXT_MARGIN_PX = 64
-DEFAULT_MASK_GROW_PX = 8
+# Generous on purpose: an edit can change a region's silhouette (a closed
+# fist opening into a spread-finger peace sign extends well past the
+# fist's own outline) — a tight mask would clip the new shape. See
+# PillowImageCompositor.
+DEFAULT_MASK_GROW_PX = 40
 DEFAULT_MASK_FEATHER_PX = 12
 
 
@@ -47,7 +50,6 @@ class EditRegionUseCase:
         image_segmenter: ImageSegmenter,
         image_editor: ImageEditor,
         image_compositor: ImageCompositor,
-        crop_context_margin_px: int = DEFAULT_CROP_CONTEXT_MARGIN_PX,
         mask_grow_px: int = DEFAULT_MASK_GROW_PX,
         mask_feather_px: int = DEFAULT_MASK_FEATHER_PX,
     ) -> None:
@@ -56,7 +58,6 @@ class EditRegionUseCase:
         self._segmenter = image_segmenter
         self._editor = image_editor
         self._compositor = image_compositor
-        self._crop_context_margin_px = crop_context_margin_px
         self._mask_grow_px = mask_grow_px
         self._mask_feather_px = mask_feather_px
 
@@ -104,6 +105,7 @@ class EditRegionUseCase:
                 edited_region_png_bytes=editor_result.edited_region_png_bytes,
                 region_box=editor_result.region_box_used,
                 mask_png_bytes=mask_bytes,
+                grow_px=mask.grow_px,
                 feather_px=self._mask_feather_px,
             )
 

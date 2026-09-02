@@ -9,6 +9,18 @@ export interface OperationCatalogEntry {
   emoji: string;
 }
 
+export interface EditGenerationResult {
+  editId: string;
+  status: "preview_ready" | "failed";
+  previewUrl: string | null;
+  errorMessage: string | null;
+}
+
+export interface ConfirmEditResult {
+  editId: string;
+  finalUrl: string;
+}
+
 /**
  * Everything Application knows about talking to a backend — no fetch, no
  * endpoint paths, no HTTP status codes here. adapters/http/HttpImageApi is
@@ -19,4 +31,7 @@ export interface ImageApiPort {
   uploadImage(file: File): Promise<UploadedImage>;
   analyzeImage(imageId: string): Promise<Region[]>;
   listOperationsForRegion(regionType: RegionType): Promise<OperationCatalogEntry[]>;
+  requestEdit(imageId: string, regionId: string, operation: EditOperation): Promise<EditGenerationResult>;
+  confirmEdit(editId: string): Promise<ConfirmEditResult>;
+  discardEdit(editId: string): Promise<void>;
 }

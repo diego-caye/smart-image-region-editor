@@ -1,6 +1,9 @@
 import { useCallback } from "react";
 import { analyzeImage } from "../../application/use-cases/analyzeImage";
+import { confirmEdit as confirmEditUseCase } from "../../application/use-cases/confirmEdit";
+import { discardEdit as discardEditUseCase } from "../../application/use-cases/discardEdit";
 import { listOperationsForRegion } from "../../application/use-cases/listOperationsForRegion";
+import { requestEdit as requestEditUseCase } from "../../application/use-cases/requestEdit";
 import { uploadImage } from "../../application/use-cases/uploadImage";
 import type { EditOperation } from "../../domain/types/EditOperation";
 import { useEditSessionContext } from "../../infrastructure/state/EditSessionContext";
@@ -65,5 +68,58 @@ export function useEditSession() {
     [dispatch],
   );
 
-  return { ...state, upload, analyze, selectRegion, selectOperation };
+  const requestEdit = useCallback(async () => {
+    if (!state.image || !state.selectedRegionId || !state.selectedOperation) return;
+    dispatch({ type: "EDIT_START" });
+    try {
+      const result = await requestEditUseCase(
+        api,
+        state.image.imageId,
+        state.selectedRegionId,
+        state.selectedOperation,
+      );
+      dispatch({
+        type: "EDIT_SUCCESS",
+        editId: result.editId,
+        status: result.status,
+        previewUrl: result.previewUrl,
+        errorMessage: result.errorMessage,
+      });
+    } catch (error) {
+      dispatch({ type: "EDIT_REQUEST_ERROR", message: messageFrom(error) });
+    }
+  }, [api, dispatch, state.image, state.selectedRegionId, state.selectedOperation]);
+
+  const confirmEdit = useCallback(async () => {
+    if (!state.editId) return;
+    dispatch({ type: "CONFIRM_START" });
+    try {
+      const result = await confirmEditUseCase(api, state.editId);
+      dispatch({ type: "CONFIRM_SUCCESS", finalUrl: result.finalUrl });
+    } catch (error) {
+      dispatch({ type: "CONFIRM_ERROR", message: messageFrom(error) });
+    }
+  }, [api, dispatch, state.editId]);
+
+  const discardEdit = useCallback(async () => {
+    if (!state.editId) return;
+    dispatch({ type: "DISCARD_START" });
+    try {
+      await discardEditUseCase(api, state.editId);
+      dispatch({ type: "DISCARD_SUCCESS" });
+    } catch (error) {
+      dispatch({ type: "DISCARD_ERROR", message: messageFrom(error) });
+    }
+  }, [api, dispatch, state.editId]);
+
+  return {
+    ...state,
+    upload,
+    analyze,
+    selectRegion,
+    selectOperation,
+    requestEdit,
+    confirmEdit,
+    discardEdit,
+  };
 }

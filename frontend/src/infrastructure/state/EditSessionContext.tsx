@@ -8,11 +8,18 @@ import type { EditOperation } from "../../domain/types/EditOperation";
 export type UploadStatus = "idle" | "uploading" | "ready" | "error";
 export type AnalysisStatus = "idle" | "analyzing" | "ready" | "error";
 export type OperationsStatus = "idle" | "loading" | "ready" | "error";
+export type EditGenerationStatus = "idle" | "generating" | "ready" | "error";
+export type EditConfirmStatus = "idle" | "confirming" | "discarding" | "error";
 
 export interface EditSessionState {
   status: UploadStatus;
   image: UploadedImage | null;
   errorMessage: string | null;
+
+  // The image regions/edits are shown against and applied on top of —
+  // starts as the original upload, advances to each confirmed edit's
+  // result so a second edit builds on the first instead of overwriting it.
+  currentImageUrl: string | null;
 
   analysisStatus: AnalysisStatus;
   analysisError: string | null;
@@ -24,6 +31,13 @@ export interface EditSessionState {
   operations: OperationCatalogEntry[];
 
   selectedOperation: EditOperation | null;
+
+  editId: string | null;
+  editGenerationStatus: EditGenerationStatus;
+  editError: string | null;
+  editBeforeUrl: string | null;
+  previewUrl: string | null;
+  editConfirmStatus: EditConfirmStatus;
 }
 
 export type EditSessionAction =
@@ -37,12 +51,28 @@ export type EditSessionAction =
   | { type: "OPERATIONS_START" }
   | { type: "OPERATIONS_SUCCESS"; operations: OperationCatalogEntry[] }
   | { type: "OPERATIONS_ERROR"; message: string }
-  | { type: "SELECT_OPERATION"; operation: EditOperation };
+  | { type: "SELECT_OPERATION"; operation: EditOperation }
+  | { type: "EDIT_START" }
+  | {
+      type: "EDIT_SUCCESS";
+      editId: string;
+      status: "preview_ready" | "failed";
+      previewUrl: string | null;
+      errorMessage: string | null;
+    }
+  | { type: "EDIT_REQUEST_ERROR"; message: string }
+  | { type: "CONFIRM_START" }
+  | { type: "CONFIRM_SUCCESS"; finalUrl: string }
+  | { type: "CONFIRM_ERROR"; message: string }
+  | { type: "DISCARD_START" }
+  | { type: "DISCARD_SUCCESS" }
+  | { type: "DISCARD_ERROR"; message: string };
 
 const initialState: EditSessionState = {
   status: "idle",
   image: null,
   errorMessage: null,
+  currentImageUrl: null,
   analysisStatus: "idle",
   analysisError: null,
   regions: [],
@@ -51,6 +81,21 @@ const initialState: EditSessionState = {
   operationsError: null,
   operations: [],
   selectedOperation: null,
+  editId: null,
+  editGenerationStatus: "idle",
+  editError: null,
+  editBeforeUrl: null,
+  previewUrl: null,
+  editConfirmStatus: "idle",
+};
+
+const clearedEditState = {
+  editId: null,
+  editGenerationStatus: "idle" as const,
+  editError: null,
+  editBeforeUrl: null,
+  previewUrl: null,
+  editConfirmStatus: "idle" as const,
 };
 
 function reducer(state: EditSessionState, action: EditSessionAction): EditSessionState {
@@ -58,7 +103,12 @@ function reducer(state: EditSessionState, action: EditSessionAction): EditSessio
     case "UPLOAD_START":
       return { ...initialState, status: "uploading" };
     case "UPLOAD_SUCCESS":
-      return { ...initialState, status: "ready", image: action.image };
+      return {
+        ...initialState,
+        status: "ready",
+        image: action.image,
+        currentImageUrl: action.image.url,
+      };
     case "UPLOAD_ERROR":
       return { ...state, status: "error", errorMessage: action.message };
 
@@ -70,7 +120,7 @@ function reducer(state: EditSessionState, action: EditSessionAction): EditSessio
       return { ...state, analysisStatus: "error", analysisError: action.message };
 
     // Selecting a (possibly different) region always clears whatever
-    // operation catalog/selection belonged to the previous one.
+    // operation catalog/selection/edit belonged to the previous one.
     case "SELECT_REGION":
       return {
         ...state,
@@ -79,6 +129,7 @@ function reducer(state: EditSessionState, action: EditSessionAction): EditSessio
         operationsError: null,
         operations: [],
         selectedOperation: null,
+        ...clearedEditState,
       };
     case "OPERATIONS_START":
       return { ...state, operationsStatus: "loading", operationsError: null };
@@ -87,8 +138,54 @@ function reducer(state: EditSessionState, action: EditSessionAction): EditSessio
     case "OPERATIONS_ERROR":
       return { ...state, operationsStatus: "error", operationsError: action.message };
 
+    // Picking a different operation invalidates any preview generated for
+    // the previous one.
     case "SELECT_OPERATION":
-      return { ...state, selectedOperation: action.operation };
+      return { ...state, selectedOperation: action.operation, ...clearedEditState };
+
+    case "EDIT_START":
+      return {
+        ...state,
+        editGenerationStatus: "generating",
+        editError: null,
+        editBeforeUrl: state.currentImageUrl,
+        previewUrl: null,
+        editId: null,
+      };
+    case "EDIT_SUCCESS":
+      return {
+        ...state,
+        editId: action.editId,
+        editGenerationStatus: action.status === "preview_ready" ? "ready" : "error",
+        editError: action.status === "failed" ? action.errorMessage : null,
+        previewUrl: action.previewUrl,
+      };
+    case "EDIT_REQUEST_ERROR":
+      return { ...state, editGenerationStatus: "error", editError: action.message };
+
+    case "CONFIRM_START":
+      return { ...state, editConfirmStatus: "confirming" };
+    case "CONFIRM_SUCCESS":
+      return {
+        ...state,
+        currentImageUrl: action.finalUrl,
+        selectedRegionId: null,
+        operationsStatus: "idle",
+        operations: [],
+        selectedOperation: null,
+        ...clearedEditState,
+      };
+    case "CONFIRM_ERROR":
+      return { ...state, editConfirmStatus: "error", editError: action.message };
+
+    case "DISCARD_START":
+      return { ...state, editConfirmStatus: "discarding" };
+    case "DISCARD_SUCCESS":
+      // Keep the region/operation catalog so the user can immediately try
+      // a different operation on the same region.
+      return { ...state, ...clearedEditState };
+    case "DISCARD_ERROR":
+      return { ...state, editConfirmStatus: "error", editError: action.message };
 
     default:
       return state;
@@ -104,10 +201,11 @@ interface EditSessionContextValue {
 const EditSessionContext = createContext<EditSessionContextValue | null>(null);
 
 /** The wizard's shared state. A linear upload -> analyze -> select region ->
- * select operation flow doesn't need Redux/Zustand — a Context + reducer is
- * enough, and it's the only piece of frontend/infrastructure that
- * presentation hooks reach into. `api` defaults to the real HttpImageApi but
- * can be swapped (tests, storybook) via the prop. */
+ * select operation -> generate/accept flow doesn't need Redux/Zustand — a
+ * Context + reducer is enough, and it's the only piece of
+ * frontend/infrastructure that presentation hooks reach into. `api`
+ * defaults to the real HttpImageApi but can be swapped (tests, storybook)
+ * via the prop. */
 export function EditSessionProvider({
   children,
   api = new HttpImageApi(),

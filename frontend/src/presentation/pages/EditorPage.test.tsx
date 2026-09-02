@@ -143,4 +143,97 @@ describe("EditorPage", () => {
     });
     expect(screen.queryByText("3. Vista previa")).not.toBeInTheDocument();
   });
+
+  async function setUpToOperationSelected(api: FakeImageApiPort) {
+    api.nextAnalyzeResult = [
+      {
+        regionId: "region-hand",
+        regionType: "right_hand",
+        boundingBox: { x: 100, y: 100, width: 50, height: 50 },
+        confidence: 0.9,
+      },
+    ];
+    api.operationsByRegion = {
+      right_hand: [{ operation: "peace_sign", label: "Señal de paz", emoji: "✌️" }],
+    };
+    renderWithFakeApi(api);
+    const user = await uploadAFile();
+    await user.click(screen.getByRole("button", { name: "Analizar imagen" }));
+    await waitFor(() => screen.getByRole("button", { name: "Mano derecha" }));
+    await user.click(screen.getByRole("button", { name: "Mano derecha" }));
+    await waitFor(() => screen.getByRole("button", { name: /Señal de paz/ }));
+    await user.click(screen.getByRole("button", { name: /Señal de paz/ }));
+    return user;
+  }
+
+  it("generates a preview and accepting it updates the image and resets selection", async () => {
+    const api = new FakeImageApiPort();
+    api.nextEditResult = {
+      editId: "edit-1",
+      status: "preview_ready",
+      previewUrl: "http://example.test/static/preview/edit-1.png",
+      errorMessage: null,
+    };
+    api.nextConfirmResult = { editId: "edit-1", finalUrl: "http://example.test/static/preview/final.png" };
+    const user = await setUpToOperationSelected(api);
+
+    await user.click(screen.getByRole("button", { name: "Generar vista previa" }));
+
+    await waitFor(() => {
+      expect(screen.getByAltText("Después")).toHaveAttribute(
+        "src",
+        "http://example.test/static/preview/edit-1.png",
+      );
+    });
+    expect(api.requestedEdits).toEqual([
+      { imageId: "fake-image-id", regionId: "region-hand", operation: "peace_sign" },
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "Aceptar" }));
+
+    await waitFor(() => {
+      expect(screen.getByAltText("Imagen subida")).toHaveAttribute(
+        "src",
+        "http://example.test/static/preview/final.png",
+      );
+    });
+    expect(api.confirmedEditIds).toEqual(["edit-1"]);
+    // selection resets so the user can pick another region for a second edit
+    expect(screen.queryByText("2. Elige una transformación")).not.toBeInTheDocument();
+  });
+
+  it("shows the backend's failure message and lets the user retry", async () => {
+    const api = new FakeImageApiPort();
+    api.nextEditResult = {
+      editId: "edit-1",
+      status: "failed",
+      previewUrl: null,
+      errorMessage: "ComfyUI timed out",
+    };
+    const user = await setUpToOperationSelected(api);
+
+    await user.click(screen.getByRole("button", { name: "Generar vista previa" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("ComfyUI timed out");
+    });
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeInTheDocument();
+  });
+
+  it("discarding a preview clears it but keeps the operation gallery open", async () => {
+    const api = new FakeImageApiPort();
+    const user = await setUpToOperationSelected(api);
+
+    await user.click(screen.getByRole("button", { name: "Generar vista previa" }));
+    await waitFor(() => screen.getByRole("button", { name: "Descartar" }));
+
+    await user.click(screen.getByRole("button", { name: "Descartar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Generar vista previa" })).toBeInTheDocument();
+    });
+    expect(api.discardedEditIds).toEqual(["fake-edit-id"]);
+    // still on the same region's operation gallery, not reset further
+    expect(screen.getByText("2. Elige una transformación")).toBeInTheDocument();
+  });
 });

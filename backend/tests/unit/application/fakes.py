@@ -8,8 +8,11 @@ real adapter.
 
 from __future__ import annotations
 
+from io import BytesIO
 from itertools import count
 from uuid import UUID
+
+from PIL import Image as PILImage
 
 from app.domain.entities.edit import Edit
 from app.domain.entities.edit_session import EditSession
@@ -117,17 +120,29 @@ class FakeImageDetector(ImageDetector):
         ]
 
 
+def _solid_png(size: tuple[int, int], value: int | tuple[int, int, int] = 255) -> bytes:
+    """A real, valid PNG (not a placeholder string) so fakes can be used
+    interchangeably with the real Pillow-based adapters (e.g.
+    PillowImageCompositor in integration tests), not just FakeImageCompositor."""
+    mode = "L" if isinstance(value, int) else "RGB"
+    buffer = BytesIO()
+    PILImage.new(mode, size, color=value).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 class FakeImageSegmenter(ImageSegmenter):
-    def __init__(self, mask_bytes: bytes = b"FAKE-MASK") -> None:
-        self._mask_bytes = mask_bytes
+    def __init__(self, mask_bytes: bytes | None = None) -> None:
+        self._mask_bytes = mask_bytes if mask_bytes is not None else _solid_png((200, 200), 255)
 
     def segment(self, image_bytes: bytes, region: DetectedRegion) -> SegmentationResult:
         return SegmentationResult(mask_png_bytes=self._mask_bytes, width=200, height=200)
 
 
 class FakeImageEditor(ImageEditor):
-    """By default echoes back a fixed "edited" crop. Pass should_fail=True to
-    exercise the EditRegionUseCase's failure path."""
+    """By default echoes back a fixed "edited" crop (a real PNG, sized to
+    region_box, so it works with the real PillowImageCompositor too — not
+    just FakeImageCompositor). Pass should_fail=True to exercise
+    EditRegionUseCase's failure path."""
 
     def __init__(self, should_fail: bool = False) -> None:
         self._should_fail = should_fail
@@ -144,7 +159,7 @@ class FakeImageEditor(ImageEditor):
         if self._should_fail:
             raise RuntimeError("fake editor failure")
         return EditResult(
-            edited_region_png_bytes=b"FAKE-EDITED-REGION",
+            edited_region_png_bytes=_solid_png((region_box.width, region_box.height), (0, 255, 0)),
             region_box_used=region_box,
             seed=42,
             model_metadata={"operation": operation.value},
@@ -159,6 +174,7 @@ class FakeImageCompositor(ImageCompositor):
         edited_region_png_bytes: bytes,
         region_box: BoundingBox,
         mask_png_bytes: bytes,
+        grow_px: int,
         feather_px: int,
     ) -> bytes:
         return b"COMPOSITED:" + original_png_bytes + b"+" + edited_region_png_bytes
