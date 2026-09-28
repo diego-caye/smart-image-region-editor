@@ -65,28 +65,49 @@ def get_list_operations_use_case() -> ListOperationsForRegionUseCase:
 
 @lru_cache
 def get_image_detector() -> ImageDetector:
-    # Imported lazily so the app still boots without ultralytics/torch
-    # installed (e.g. before Phase 3's ML deps are set up) — only hitting
-    # /analyze requires them. Loading two YOLO models is expensive, hence
-    # the process-wide singleton via lru_cache.
+    # Imported lazily so the app still boots without ultralytics/torch/
+    # mediapipe installed (e.g. before Phase 3's ML deps are set up) — only
+    # hitting /analyze requires them. Loading the YOLO + MediaPipe models is
+    # expensive, hence the process-wide singleton via lru_cache.
+    from app.adapters.vision.composite_image_detector import CompositeImageDetector
+    from app.adapters.vision.mediapipe_region_detector import MediaPipeRegionDetector
     from app.adapters.vision.yolo_sam2_image_detector import YoloImageDetector
     from app.infrastructure.vision.device import resolve_device
-    from app.infrastructure.vision.model_registry import require_file
+    from app.infrastructure.vision.mediapipe_landmarker import MediaPipeLandmarker
+    from app.infrastructure.vision.model_registry import resolve_weights_file
     from app.infrastructure.vision.yolo_detector import YoloDetector
 
     settings = get_settings()
     device = resolve_device(settings.detection_device)
-    face_detector = YoloDetector(
-        require_file(settings.yolo_face_model_path, what="Face YOLO weights"),
-        device=device,
-        label="face",
+    face_weights = resolve_weights_file(
+        settings.yolo_face_model_path,
+        what="Face YOLO weights",
+        hf_repo_id=settings.yolo_face_hf_repo_id,
+        hf_filename=settings.yolo_face_hf_filename,
+        cache_dir=settings.models_cache_dir,
     )
-    hand_detector = YoloDetector(
-        require_file(settings.yolo_hand_model_path, what="Hand YOLO weights"),
-        device=device,
-        label="hand",
+    hand_weights = resolve_weights_file(
+        settings.yolo_hand_model_path,
+        what="Hand YOLO weights",
+        hf_repo_id=settings.yolo_hand_hf_repo_id,
+        hf_filename=settings.yolo_hand_hf_filename,
+        cache_dir=settings.models_cache_dir,
     )
-    return YoloImageDetector(face_detector, hand_detector)
+    face_detector = YoloDetector(face_weights, device=device, label="face")
+    hand_detector = YoloDetector(hand_weights, device=device, label="hand")
+    yolo_detector = YoloImageDetector(face_detector, hand_detector)
+
+    landmarker = MediaPipeLandmarker(
+        face_model_path=settings.models_cache_dir / "mediapipe" / "face_landmarker.task",
+        face_model_url=settings.mediapipe_face_landmarker_url,
+        pose_model_path=settings.models_cache_dir / "mediapipe" / "pose_landmarker.task",
+        pose_model_url=settings.mediapipe_pose_landmarker_url,
+    )
+    mediapipe_detector = MediaPipeRegionDetector(
+        landmarker, face_crop_margin_px=settings.face_landmark_crop_margin_px
+    )
+
+    return CompositeImageDetector(yolo_detector, mediapipe_detector)
 
 
 def get_analyze_image_use_case(

@@ -29,6 +29,7 @@ ml = [
     "ultralytics>=8.3",
     "sam2>=1.0",
     "huggingface-hub>=0.26",
+    "mediapipe>=1.0.1",
 ]
 dev = [
     "pytest>=8.3",

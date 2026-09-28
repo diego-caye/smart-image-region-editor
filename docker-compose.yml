@@ -1,11 +1,39 @@
 services:
+  # Vanilla ComfyUI, containerized so cloning this repo is enough to run the
+  # whole stack — no separate ComfyUI install required. Its own UI is
+  # reachable directly at http://localhost:${COMFYUI_PORT:-8188} if you want
+  # to inspect the workflow graph or queue by hand. Models are downloaded
+  # into the comfyui_data volume on first start (see comfyui/entrypoint.sh);
+  # this takes a while (~15GB) but only happens once.
+  comfyui:
+    build:
+      context: ./comfyui
+    ports:
+      - "${COMFYUI_PORT:-8188}:8188"
+    volumes:
+      - comfyui_data:/data
+    # Remove this whole `deploy` block to run ComfyUI CPU-only on a machine
+    # without the nvidia container runtime (editing will be far slower).
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
     ports:
       - "${BACKEND_PORT:-8420}:8000"
     environment:
-      COMFYUI_BASE_URL: ${COMFYUI_BASE_URL:-http://host.docker.internal:8188}
+      # Points at the comfyui service above by default. Override to
+      # http://host.docker.internal:8188 (or any URL) instead if you'd
+      # rather use your own native ComfyUI install (e.g. one with custom
+      # nodes/models already set up).
+      COMFYUI_BASE_URL: ${COMFYUI_BASE_URL:-http://comfyui:8188}
       COMFYUI_POLL_INTERVAL_SECONDS: "1.0"
       COMFYUI_TIMEOUT_SECONDS: "180.0"
       STORAGE_ROOT: /app/data/images
@@ -13,8 +41,12 @@ services:
       CORS_ALLOW_ORIGINS: '["http://localhost:${FRONTEND_PORT:-5180}","http://127.0.0.1:${FRONTEND_PORT:-5180}"]'
       DETECTION_DEVICE: ${DETECTION_DEVICE:-cpu}
       SEGMENTATION_DEVICE: ${SEGMENTATION_DEVICE:-cuda}
-      # ComfyUI's models dir is mounted read-only below; these paths are
-      # where face/hand YOLO weights live inside it.
+      # Points at the optional bind mount below. If COMFYUI_MODELS_DIR isn't
+      # set (or doesn't contain these files), resolve_weights_file() falls
+      # back to downloading the same weights from Hugging Face on its own —
+      # this mount is purely a "skip the duplicate download" optimization
+      # for people who already have a native ComfyUI install, never a hard
+      # requirement.
       YOLO_FACE_MODEL_PATH: /comfyui_models/ultralytics/bbox/face_yolov8n.pt
       YOLO_HAND_MODEL_PATH: /comfyui_models/ultralytics/bbox/hand_yolov8n.pt
       SAM2_MODEL_ID: ${SAM2_MODEL_ID:-facebook/sam2-hiera-base-plus}
@@ -22,12 +54,16 @@ services:
     volumes:
       - backend_data:/app/data
       - models_cache:/app/models_cache
+      # Optional: see YOLO_FACE_MODEL_PATH/YOLO_HAND_MODEL_PATH above. Only
+      # set COMFYUI_MODELS_DIR if you have a native ComfyUI install whose
+      # weights you want to reuse; an absent/empty mount degrades gracefully.
       - ${COMFYUI_MODELS_DIR:-C:/ComfyUI/models}:/comfyui_models:ro
     extra_hosts:
-      # host.docker.internal usually resolves automatically on Docker
-      # Desktop; this is a no-op there and a fallback for Linux Docker
-      # Engine, where it doesn't by default.
+      # Only relevant if COMFYUI_BASE_URL is overridden to
+      # host.docker.internal above; harmless no-op otherwise.
       - "host.docker.internal:host-gateway"
+    depends_on:
+      - comfyui
     # Remove this whole `deploy` block to run detection/segmentation
     # CPU-only (also set SEGMENTATION_DEVICE=cpu above) on a machine without
     # the nvidia container runtime.
@@ -57,3 +93,4 @@ services:
 volumes:
   backend_data:
   models_cache:
+  comfyui_data:

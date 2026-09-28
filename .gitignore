@@ -1,6 +1,10 @@
 # --- Docker Compose env (root) ---
 /.env
 
+# Real test photo dropped at the repo root during manual verification —
+# never committed (same consent policy as the golden dataset images below).
+/person.jpg
+
 # --- Backend (Python) ---
 backend/.venv/
 backend/__pycache__/

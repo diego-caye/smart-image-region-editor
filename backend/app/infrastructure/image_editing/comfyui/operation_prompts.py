@@ -53,6 +53,15 @@ _PROMPTS: dict[EditOperation, str] = {
         "visible."
         + _PRESERVE_CLAUSE
     ),
+    EditOperation.OPEN_EYES: (
+        "Change the eyes to be fully open and alert, looking forward naturally."
+        + _PRESERVE_CLAUSE
+    ),
+    EditOperation.CLOSED_EYES: (
+        "Change the eyes to be gently closed, as if blinking or relaxed, eyelids "
+        "fully down."
+        + _PRESERVE_CLAUSE
+    ),
 }
 
 

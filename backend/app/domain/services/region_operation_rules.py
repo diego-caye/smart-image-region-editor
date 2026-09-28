@@ -17,8 +17,12 @@ _ALLOWED_OPERATIONS: dict[RegionType, frozenset[EditOperation]] = {
     RegionType.MOUTH: frozenset(
         {EditOperation.SMILE, EditOperation.SMILE_WITH_TEETH, EditOperation.CLOSED_MOUTH}
     ),
+    RegionType.EYES: frozenset({EditOperation.OPEN_EYES, EditOperation.CLOSED_EYES}),
+    # Detected and shown, not yet editable — same MVP stance FACE already
+    # had (no whole-face/whole-body operation makes sense yet without a
+    # much larger, riskier edit than a single gesture/expression).
     RegionType.FACE: frozenset(),
-    RegionType.EYES: frozenset(),
+    RegionType.BODY: frozenset(),
 }
 
 

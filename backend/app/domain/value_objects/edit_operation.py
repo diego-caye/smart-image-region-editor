@@ -19,7 +19,11 @@ class EditOperation(StrEnum):
     THUMBS_UP = "thumbs_up"
     FIST = "fist"
 
-    # Mouth expressions (RegionType.MOUTH — detector not wired yet in the MVP)
+    # Mouth expressions
     SMILE = "smile"
     SMILE_WITH_TEETH = "smile_with_teeth"
     CLOSED_MOUTH = "closed_mouth"
+
+    # Eyes
+    OPEN_EYES = "open_eyes"
+    CLOSED_EYES = "closed_eyes"

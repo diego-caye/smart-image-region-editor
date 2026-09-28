@@ -60,17 +60,42 @@ class Settings(BaseSettings):
     detection_device: str = "cpu"  # YOLOv8n face/hand: tiny, fast, no VRAM impact
     segmentation_device: str = "cuda"  # SAM2: quality benefits from GPU, released after each call
 
-    # Reuse ComfyUI's already-downloaded YOLO weights by default instead of
-    # duplicating the download; override via env if you'd rather keep a
-    # private copy under the backend's own models_cache/.
+    # Reuse ComfyUI's already-downloaded YOLO weights when present (avoids a
+    # duplicate download) — but if configured_path doesn't exist (no
+    # ComfyUI installed at all, e.g. a fresh clone or the Docker deployment
+    # with no local ComfyUI to mount), resolve_weights_file() downloads the
+    # exact same files from Bingsu/adetailer, verified byte-for-byte
+    # identical to these — see docs/architecture.md.
     yolo_face_model_path: Path = Path("C:/ComfyUI/models/ultralytics/bbox/face_yolov8n.pt")
     yolo_hand_model_path: Path = Path("C:/ComfyUI/models/ultralytics/bbox/hand_yolov8n.pt")
+    yolo_face_hf_repo_id: str = "Bingsu/adetailer"
+    yolo_face_hf_filename: str = "face_yolov8n.pt"
+    yolo_hand_hf_repo_id: str = "Bingsu/adetailer"
+    yolo_hand_hf_filename: str = "hand_yolov8n.pt"
 
     # SAM2's official pip package needs its own checkpoint format — not the
     # safetensors ComfyUI's custom node uses — so the backend fetches/caches
     # its own copy here on first use.
     sam2_model_id: str = "facebook/sam2-hiera-base-plus"
     models_cache_dir: Path = BACKEND_ROOT / "models_cache"
+
+    # MediaPipe (mouth/eyes via FaceLandmarker, body via PoseLandmarker) —
+    # both URLs confirmed reachable against Google's real model host, not
+    # guessed. "lite" pose model: fast enough for a single-person photo,
+    # accuracy isn't the bottleneck for a bounding-box-sized region.
+    mediapipe_face_landmarker_url: str = (
+        "https://storage.googleapis.com/mediapipe-models/face_landmarker/"
+        "face_landmarker/float16/1/face_landmarker.task"
+    )
+    mediapipe_pose_landmarker_url: str = (
+        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
+        "pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
+    )
+    # MediaPipe's face detector misses small faces in a full photo — verified
+    # against a real photo, 0 faces found on the whole image vs. 1 found
+    # after cropping around the (already YOLO-detected) face box with this
+    # margin. See docs/architecture.md.
+    face_landmark_crop_margin_px: int = 60
 
 
 @lru_cache

@@ -1,172 +1,197 @@
 # Smart Image Region Editor
 
-Sube una foto, el sistema detecta regiones (cara, manos — boca/ojos preparados
-para más adelante), seleccionas visualmente una región y una transformación
-predefinida ("✌️ Señal de paz"), y solo esa región cambia — el resto de la
-imagen se conserva. Arquitectura hexagonal (Ports & Adapters) en backend y
-frontend. Ver [docs/architecture.md](docs/architecture.md) para las
-decisiones de diseño y su porqué.
+Upload a photo, the system detects regions (face, hands, mouth, eyes, body),
+you visually select a region and a predefined transformation ("✌️ Peace
+sign"), and only that region changes — the rest of the image is preserved.
+Hexagonal architecture (Ports & Adapters) in both backend and frontend.
+Includes a containerized ComfyUI, so cloning the repo and running
+`docker compose up` is enough even if you don't have ComfyUI installed. See
+[docs/architecture.md](docs/architecture.md) for the design decisions and
+their reasoning.
 
-## Estado actual
+## Current status
 
-| Fase | Qué incluye | Estado |
+| Phase | What it includes | Status |
 |---|---|---|
-| 0 | Scaffolding, estructura hexagonal, git | ✅ |
-| 1–2 | Domain + Application completos, subida de imagen, persistencia (SQLite) | ✅ |
-| 3 | Detección de cara/manos (YOLOv8) + máscara precisa (SAM2), en el backend | ✅ |
-| 3b | Frontend: overlay de regiones seleccionables + galería visual de operaciones (shadcn/ui) | ✅ |
-| 4 | Catálogo visual de operaciones | ✅ |
-| 5 | Edición localizada vía ComfyUI + composición, extremo a extremo (backend + frontend) | ✅ |
-| 6 | Golden dataset / evaluación | ✅ andamiaje + `region_preservation` real · `edit_quality`/`identity_preservation` son stubs documentados |
-| — | Despliegue en Docker (backend + frontend, GPU) | ✅ |
-| — | Extender a boca/ojos/cuerpo | ⏳ pendiente (siguiente paso natural) |
+| 0 | Scaffolding, hexagonal structure, git | ✅ |
+| 1–2 | Complete Domain + Application, image upload, persistence (SQLite) | ✅ |
+| 3 | Face/hand detection (YOLOv8) + precise mask (SAM2), in the backend | ✅ |
+| 3b | Frontend: selectable region overlay + visual operation gallery (shadcn/ui) | ✅ |
+| 4 | Visual operation catalog | ✅ |
+| 5 | Localized editing via ComfyUI + composition, end-to-end (backend + frontend) | ✅ |
+| 6 | Golden dataset / evaluation | ✅ scaffolding + real `region_preservation` · `edit_quality`/`identity_preservation` are documented stubs |
+| — | Docker deployment (backend + frontend, GPU) | ✅ |
+| — | Extend to mouth/eyes/body (detection) | ✅ MediaPipe — mouth/eyes are already editable; body is detected but has no operations yet |
+| — | Containerized ComfyUI (self-contained repo, no native install required) | ✅ |
 
-Todo lo que está "✅" tiene tests (unitarios + integración) en verde y fue
-verificado además contra procesos reales corriendo (`uvicorn`/`docker
-compose` + `curl`, detección real sobre una foto real, y `vite build`).
+Everything marked "✅" has passing tests (unit + integration) and was also
+verified against real running processes (`uvicorn`/`docker compose` +
+`curl`, real detection on a real photo, and `vite build`).
 
-**Puertos**: este proyecto usa `8420` (backend) y `5180` (frontend) en vez de
-los típicos `8000`/`5173`, porque esos ya están en uso por otro proyecto en
-esta máquina. ComfyUI sigue en su puerto habitual, `8188`.
+**Ports**: this project uses `8420` (backend), `5180` (frontend), and `8188`
+(ComfyUI) instead of the usual `8000`/`5173`, because the first two are
+already in use by another project on this machine.
 
-## Requisitos
+## Requirements
 
-- **Backend**: Python 3.12 (ya instalado en
-  `C:\Users\diego\AppData\Local\Programs\Python\Python312`). El proyecto usa
-  un venv propio en `backend/.venv`, no el Python 3.14 por defecto del
-  sistema (mejor compatibilidad con torch/ultralytics/sam2).
-- **Frontend**: Node.js (v24 ya instalado) + npm.
-- **ComfyUI**: tu instalación local en `http://127.0.0.1:8188` — necesaria a
-  partir de la Fase 5 (edición). No hace falta para detección/subida.
-- **GPU**: RTX 5080 (Blackwell). El backend usa exactamente el mismo build de
-  PyTorch que ComfyUI (`torch==2.10.0+cu130`) — instalarlo desde el índice
-  normal de PyPI instalaría una build sin soporte para esta GPU.
-- **Docker** (opcional, para el despliegue): Docker Desktop con el runtime
-  `nvidia` habilitado — ya verificado en esta máquina
-  (`docker run --gpus all ... nvidia-smi` funciona).
+- **Backend**: Python 3.12 (already installed at
+  `C:\Users\diego\AppData\Local\Programs\Python\Python312`). The project uses
+  its own venv at `backend/.venv`, not the system's default Python 3.14
+  (better compatibility with torch/ultralytics/sam2/mediapipe).
+- **Frontend**: Node.js (v24 already installed) + npm.
+- **ComfyUI**: only needed for a **native** run (outside Docker) — a local
+  install at `http://127.0.0.1:8188`, required starting at Phase 5 (editing),
+  not for detection/upload. **Not needed in Docker**: `docker compose up`
+  spins up its own ComfyUI container (see the Docker section below).
+- **GPU**: RTX 5080 (Blackwell). The backend uses the exact same PyTorch build
+  as ComfyUI (`torch==2.10.0+cu130`) — installing it from PyPI's normal index
+  would install a build without support for this GPU.
+- **Docker** (optional, for deployment): Docker Desktop with the `nvidia`
+  runtime enabled — already confirmed working on this machine
+  (`docker run --gpus all ... nvidia-smi` works).
 
-## Backend (nativo)
+## Backend (native)
 
 ```powershell
 cd backend
-py -3.12 -m venv .venv          # solo la primera vez
-copy .env.example .env          # y ajusta si hace falta
+py -3.12 -m venv .venv          # first time only
+copy .env.example .env          # adjust if needed
 
 ./.venv/Scripts/pip install -e ".[dev]"
-# Detección/segmentación (Fase 3) — build de PyTorch pineada para RTX 5080:
+# Detection/segmentation (Phase 3) — PyTorch build pinned for the RTX 5080:
 ./.venv/Scripts/pip install "torch==2.10.0+cu130" "torchvision==0.25.0+cu130" --index-url https://download.pytorch.org/whl/cu130
 ./.venv/Scripts/pip install -e ".[ml]"
 
 ./.venv/Scripts/uvicorn app.main:app --reload --port 8420
 ```
 
-- API en `http://127.0.0.1:8420`, docs interactivas en `/docs`.
-- Base de datos SQLite en `backend/data/app.db` (se crea sola). Imágenes en
-  `backend/data/images/{original,mask,preview,final}/`. Checkpoint de SAM2
-  cacheado en `backend/models_cache/` (se descarga solo la primera vez,
-  ~300MB, desde Hugging Face — el `.safetensors` de ComfyUI no sirve aquí
-  porque su nodo lo carga con un loader distinto al paquete oficial `sam2`).
-- Tests: `./.venv/Scripts/pytest` — rápidos, no requieren GPU/modelos/ComfyUI
-  por defecto. Para correr también los que sí los requieren:
-  `./.venv/Scripts/pytest -m live_models` (YOLO+SAM2 reales) o
-  `./.venv/Scripts/pytest -m live_comfyui` (Qwen Image Edit real).
+- API at `http://127.0.0.1:8420`, interactive docs at `/docs`.
+- SQLite database at `backend/data/app.db` (created automatically). Images in
+  `backend/data/images/{original,mask,preview,final}/`. SAM2 checkpoint
+  cached in `backend/models_cache/` (downloaded only the first time,
+  ~300MB, from Hugging Face — ComfyUI's `.safetensors` doesn't work here
+  because its node loads it with a different loader than the official
+  `sam2` package).
+- Tests: `./.venv/Scripts/pytest` — fast, don't require GPU/models/ComfyUI by
+  default. To also run the ones that do:
+  `./.venv/Scripts/pytest -m live_models` (real YOLO+SAM2) or
+  `./.venv/Scripts/pytest -m live_comfyui` (real Qwen Image Edit).
 
-Endpoints disponibles hoy:
+Endpoints available today:
 
-- `POST /images` — sube una imagen (multipart `file`), devuelve
+- `POST /images` — uploads an image (multipart `file`), returns
   `{image_id, width, height, url}`.
-- `POST /images/{id}/analyze` — corre detección real (YOLOv8 cara+manos) y
-  persiste las regiones encontradas.
-- `GET /images/{id}/regions` — relee las regiones ya detectadas.
-- `GET /regions/{region_type}/operations` — catálogo de operaciones válidas
-  para un tipo de región (p. ej. `right_hand` → saludar/paz/pulgar/puño).
-- `POST /images/{id}/edits` — `{region_id, operation}` → edición localizada
-  real (SAM2 + Qwen Image Edit vía ComfyUI + composición), devuelve un
-  preview sin tocar la imagen "oficial" todavía. ~25-30s por edición.
-- `POST /edits/{id}/confirm` — el preview pasa a ser la imagen actual de la
-  sesión; la siguiente edición se aplica sobre este resultado, no sobre el
-  original.
-- `POST /edits/{id}/discard` — descarta el preview, la sesión no cambia.
-- `GET /static/{storage_ref}` — sirve los bytes de una imagen guardada.
+- `POST /images/{id}/analyze` — runs real detection (YOLOv8 face+hands +
+  MediaPipe mouth/eyes/body) and persists the found regions.
+- `GET /images/{id}/regions` — re-reads the already-detected regions.
+- `GET /regions/{region_type}/operations` — catalog of operations valid for a
+  region type (e.g. `right_hand` → wave/peace/thumbs-up/fist).
+- `POST /images/{id}/edits` — `{region_id, operation}` → real localized
+  editing (SAM2 + Qwen Image Edit via ComfyUI + composition), returns a
+  preview without touching the "official" image yet. ~25-30s per edit.
+- `POST /edits/{id}/confirm` — the preview becomes the session's current
+  image; the next edit is applied on top of this result, not the original.
+- `POST /edits/{id}/discard` — discards the preview, the session doesn't
+  change.
+- `GET /static/{storage_ref}` — serves the bytes of a saved image.
 
-### Golden dataset / evaluación
+### Golden dataset / evaluation
 
 `backend/tests/evaluation/`:
 
-- `evaluators/region_preservation.py` — real: mide en píxeles si todo lo de
-  fuera de la máscara quedó igual entre el original y el final. Tiene sus
-  propios tests unitarios (sintéticos, sin GPU) y el runner del golden
-  dataset lo usa contra ediciones reales.
+- `evaluators/region_preservation.py` — real: measures in pixels whether
+  everything outside the mask stayed the same between the original and the
+  final image. Has its own unit tests (synthetic, no GPU) and the golden
+  dataset runner uses it against real edits.
 - `evaluators/edit_quality.py`, `evaluators/identity_preservation.py` —
-  stubs documentados (`NotImplementedError` con el enfoque previsto en el
-  docstring), no bloquean el MVP.
-- `datasets/golden_{hand,face,mouth}_edits.json` — vacíos a propósito: el
-  esquema y el runner (`test_golden_dataset.py`, opt-in vía
-  `pytest -m live_comfyui`) están listos, pero las fotos reales para
-  poblarlos no se suben al repo sin consentimiento — ver
-  `datasets/README.md` para el esquema y cómo añadir las tuyas localmente
-  (`datasets/images/`, ya en `.gitignore`).
+  documented stubs (`NotImplementedError` with the intended approach in the
+  docstring), don't block the MVP.
+- `datasets/golden_{hand,face,mouth}_edits.json` — empty on purpose: the
+  schema and runner (`test_golden_dataset.py`, opt-in via
+  `pytest -m live_comfyui`) are ready, but real photos to populate them
+  aren't uploaded to the repo without consent — see `datasets/README.md`
+  for the schema and how to add your own locally (`datasets/images/`,
+  already in `.gitignore`).
 
-## Frontend (nativo)
+## Frontend (native)
 
 ```powershell
 cd frontend
 npm install
 npm run dev      # http://localhost:5180
 npm test         # vitest
-npm run build    # type-check + build de producción
+npm run build    # type-check + production build
 ```
 
-Por defecto apunta a `http://127.0.0.1:8420` (backend). Para cambiarlo, copia
-`.env.example` a `.env.local` y ajusta `VITE_API_BASE_URL`.
+Points at `http://127.0.0.1:8420` (backend) by default. To change it, copy
+`.env.example` to `.env.local` and adjust `VITE_API_BASE_URL`.
 
-UI construida con [shadcn/ui](https://ui.shadcn.com) (Radix + Tailwind v4) —
-componentes generados en `src/presentation/components/ui/` vía
-`npx shadcn@latest add <componente>` (el `components.json` de la raíz ya
-apunta los alias `@/presentation/...` a la estructura hexagonal del
-proyecto, no a las rutas por defecto de shadcn).
+UI built with [shadcn/ui](https://ui.shadcn.com) (Radix + Tailwind v4) —
+components generated in `src/presentation/components/ui/` via
+`npx shadcn@latest add <component>` (the root `components.json` already
+points the `@/presentation/...` aliases at the project's hexagonal
+structure, not shadcn's default paths).
 
-El flujo completo funciona extremo a extremo: subir imagen → **Analizar
-imagen** (detección real YOLOv8) → overlay de cajas seleccionables sobre la
-imagen (cara/mano izq./mano der., coloreadas) → click en una región →
-galería visual de operaciones (emoji + etiqueta, nunca texto plano) →
-seleccionar una → **Generar vista previa** (SAM2 + Qwen Image Edit real vía
-ComfyUI, ~25-30s) → comparación Antes/Después → **Aceptar** (la imagen de la
-sesión avanza; una segunda edición se aplica sobre este resultado, no sobre
-el original — mano derecha→paz y mano izquierda→pulgar arriba conviven en la
-misma foto) o **Descartar** (sin cambios).
+The full flow works end-to-end: upload an image → **Analyze image** (real
+YOLOv8 detection) → overlay of selectable, colored boxes over the image
+(face/left hand/right hand) → click a region → visual operation gallery
+(emoji + label, never plain text) → select one → **Generate preview** (real
+SAM2 + Qwen Image Edit via ComfyUI, ~25-30s) → Before/After comparison →
+**Accept** (the session's image advances; a second edit is applied on top of
+this result, not the original — right hand→peace and left hand→thumbs-up
+coexist in the same photo) or **Discard** (no changes).
 
 ## Docker
 
 ```powershell
-copy .env.example .env          # ajusta COMFYUI_MODELS_DIR si tu ComfyUI no está en C:\ComfyUI
+copy .env.example .env
 docker compose up --build
 ```
 
-- Frontend en `http://localhost:5180`, backend en `http://localhost:8420`.
-- El backend corre con acceso a la GPU (`deploy.resources.reservations` en
-  `docker-compose.yml`) para SAM2; si tu máquina no tiene el runtime
-  `nvidia` de Docker configurado, quita ese bloque y pon
-  `SEGMENTATION_DEVICE=cpu` en `.env`.
-- `COMFYUI_BASE_URL` dentro del contenedor apunta a
-  `http://host.docker.internal:8188` (no a `127.0.0.1`, que dentro de un
-  contenedor se referiría a sí mismo) — ya configurado en `.env.example`.
-- Los pesos de YOLO se reutilizan montando `COMFYUI_MODELS_DIR` como
-  volumen de solo lectura; no se descargan de nuevo dentro del contenedor.
-- Datos (SQLite + imágenes) y el cache de SAM2 persisten en volúmenes con
-  nombre (`backend_data`, `models_cache`) — sobreviven a
-  `docker compose down` (no a `docker compose down -v`).
+This spins up **three** containers — frontend, backend, and **ComfyUI
+itself** (vanilla clone, no custom nodes — see
+[docs/architecture.md](docs/architecture.md)). You don't need ComfyUI
+installed on the host for this to work: that's precisely the point of
+containerizing it, so cloning this repo and running one command is enough.
 
-## Estructura
+- Frontend at `http://localhost:5180`, backend at `http://localhost:8420`,
+  **ComfyUI's own UI at `http://localhost:8188`** (useful for inspecting the
+  graph/queue directly).
+- First start: the `comfyui` container downloads ~15GB of models (Qwen Image
+  Edit + LoRA + text encoder + VAE) into a named volume (`comfyui_data`) —
+  takes several minutes depending on your bandwidth, but only the first
+  time; subsequent starts are instant.
+- The backend runs with GPU access (`deploy.resources.reservations` in
+  `docker-compose.yml`) for SAM2; ComfyUI also requests it for Qwen Image
+  Edit. If your machine doesn't have Docker's `nvidia` runtime configured,
+  remove those `deploy` blocks from both services and set
+  `SEGMENTATION_DEVICE=cpu` in `.env` (editing via ComfyUI will be much
+  slower without a GPU).
+- `COMFYUI_BASE_URL` inside the backend container points by default at
+  `http://comfyui:8188` (the service's name on Compose's internal network).
+  If you'd rather keep using a native ComfyUI install (e.g. with your own
+  custom nodes), uncomment the `COMFYUI_BASE_URL=
+  http://host.docker.internal:8188` line in `.env` — in that case the
+  `comfyui` container still starts up, but the backend simply doesn't use
+  it.
+- YOLO weights are optionally reused by mounting `COMFYUI_MODELS_DIR` (from a
+  native install, if you have one) as a read-only volume; if it's not
+  configured or the file isn't there, the backend downloads them itself from
+  Hugging Face — never a hard requirement.
+- Data (SQLite + images), the SAM2/MediaPipe cache, and ComfyUI's models
+  persist in named volumes (`backend_data`, `models_cache`, `comfyui_data`) —
+  they survive `docker compose down` (not `docker compose down -v`).
 
-Ver el árbol completo y el razonamiento de cada carpeta en
-[docs/architecture.md](docs/architecture.md). Resumen:
+## Structure
+
+See the full tree and the reasoning behind each folder in
+[docs/architecture.md](docs/architecture.md). Summary:
 
 ```
 backend/app/{domain,application,adapters,infrastructure}/
 frontend/src/{domain,application,adapters,infrastructure,presentation}/
 ```
 
-Domain y Application no importan FastAPI, SQLAlchemy, PyTorch, ComfyUI, React
-ni `fetch` — solo Adapters/Infrastructure (backend) y
-Adapters/Infrastructure (frontend) lo hacen.
+Domain and Application don't import FastAPI, SQLAlchemy, PyTorch, ComfyUI,
+React, or `fetch` — only Adapters/Infrastructure (backend) and
+Adapters/Infrastructure (frontend) do.

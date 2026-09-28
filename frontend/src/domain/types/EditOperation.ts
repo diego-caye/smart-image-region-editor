@@ -10,4 +10,6 @@ export type EditOperation =
   | "fist"
   | "smile"
   | "smile_with_teeth"
-  | "closed_mouth";
+  | "closed_mouth"
+  | "open_eyes"
+  | "closed_eyes";
