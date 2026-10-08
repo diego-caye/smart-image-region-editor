@@ -159,7 +159,14 @@ def bbox_from_points(
 ) -> BoundingBox | None:
     """Pure math: normalized (0-1) landmark points -> a padded pixel
     BoundingBox covering just the given indices. Returns None if none of
-    the indices are present (e.g. a landmark set shorter than expected)."""
+    the indices are present (e.g. a landmark set shorter than expected), or
+    if the resulting box would have zero width/height — confirmed to happen
+    in production, not just a theoretical edge case: when a body part is
+    entirely out of frame (e.g. legs in a half-body photo), PoseLandmarker
+    still returns an estimated position for every landmark, and those
+    estimates can collapse to the same pixel once rounded, which crashed
+    the whole /analyze call with BoundingBox's own "must have positive
+    width and height" check before this guard existed."""
     xs = [points[i][0] * width for i in indices if i < len(points)]
     ys = [points[i][1] * height for i in indices if i < len(points)]
     if not xs or not ys:
@@ -170,11 +177,15 @@ def bbox_from_points(
     pad_x = (x_max - x_min) * padding_ratio
     pad_y = (y_max - y_min) * padding_ratio
 
+    final_x_min = int(max(0, x_min - pad_x))
+    final_y_min = int(max(0, y_min - pad_y))
+    final_x_max = int(min(width, x_max + pad_x))
+    final_y_max = int(min(height, y_max + pad_y))
+    if final_x_max <= final_x_min or final_y_max <= final_y_min:
+        return None
+
     return BoundingBox(
-        x_min=int(max(0, x_min - pad_x)),
-        y_min=int(max(0, y_min - pad_y)),
-        x_max=int(min(width, x_max + pad_x)),
-        y_max=int(min(height, y_max + pad_y)),
+        x_min=final_x_min, y_min=final_y_min, x_max=final_x_max, y_max=final_y_max
     )
 
 

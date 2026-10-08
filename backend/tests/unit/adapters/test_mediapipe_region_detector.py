@@ -67,6 +67,16 @@ def test_bbox_from_points_returns_none_when_no_indices_present():
     assert box is None
 
 
+def test_bbox_from_points_returns_none_for_a_degenerate_zero_size_box():
+    # Reproduces a real crash: an out-of-frame body part (e.g. legs in a
+    # half-body photo) can have all its landmarks collapse to the same
+    # pixel once rounded, which must be skipped, not passed on to
+    # BoundingBox (which raises on zero width/height).
+    points = [(0.3, 0.3), (0.3, 0.3)]
+    box = bbox_from_points(points, {0, 1}, width=100, height=100, padding_ratio=0.0)
+    assert box is None
+
+
 def test_detect_mouth_and_eyes_offsets_boxes_back_to_full_image_coords():
     # 21 landmark points so lip/eye indices (drawn from real MediaPipe
     # connection index sets, some >= 300) resolve; only the ones actually
@@ -135,6 +145,33 @@ def test_detect_body_returns_body_plus_all_five_sub_regions():
         RegionType.LEFT_LEG,
         RegionType.RIGHT_LEG,
     }
+
+
+def test_detect_body_skips_a_sub_region_whose_landmarks_collapsed_instead_of_crashing():
+    from app.adapters.vision.mediapipe_region_detector import (
+        _body_landmark_indices,
+        _left_leg_indices,
+    )
+
+    body_idx = sorted(_body_landmark_indices())
+    points = [(0.5, 0.5)] * (max(body_idx) + 1)
+    for offset, i in enumerate(body_idx):
+        points[i] = (0.3 + 0.001 * offset, 0.7 + 0.001 * offset)
+    # Simulate an out-of-frame leg: every LEFT_LEG landmark collapsed to the
+    # exact same point, as a real half-body photo produced in production.
+    for i in _left_leg_indices():
+        points[i] = (0.42, 0.9)
+
+    landmarks = Landmarks(points=points, image_width=400, image_height=400)
+    landmarker = FakeLandmarker(pose_landmarks=landmarks)
+    detector = MediaPipeRegionDetector(landmarker, face_crop_margin_px=10)
+
+    regions = detector.detect_body(_png_bytes(400, 400), image_id=uuid4())
+
+    region_types = {r.region_type for r in regions}
+    assert RegionType.LEFT_LEG not in region_types
+    assert RegionType.BODY in region_types
+    assert RegionType.RIGHT_LEG in region_types
 
 
 def test_detect_body_returns_empty_when_no_pose_found():
