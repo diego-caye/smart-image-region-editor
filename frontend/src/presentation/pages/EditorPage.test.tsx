@@ -18,7 +18,7 @@ async function uploadAFile() {
   const input = screen.getByTestId("image-uploader-input");
   const file = new File(["fake-bytes"], "photo.png", { type: "image/png" });
   await user.upload(input, file);
-  await waitFor(() => expect(screen.getByAltText("Imagen subida")).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByAltText("Uploaded image")).toBeInTheDocument());
   return user;
 }
 
@@ -34,7 +34,7 @@ describe("EditorPage", () => {
     renderWithFakeApi(api);
     await uploadAFile();
 
-    expect(screen.getByAltText("Imagen subida")).toHaveAttribute(
+    expect(screen.getByAltText("Uploaded image")).toHaveAttribute(
       "src",
       "http://example.test/static/original/abc.png",
     );
@@ -79,31 +79,31 @@ describe("EditorPage", () => {
     ];
     api.operationsByRegion = {
       right_hand: [
-        { operation: "peace_sign", label: "Señal de paz", emoji: "✌️" },
-        { operation: "wave", label: "Saludar", emoji: "👋" },
+        { operation: "peace_sign", label: "Peace sign", emoji: "✌️" },
+        { operation: "wave", label: "Wave", emoji: "👋" },
       ],
     };
     renderWithFakeApi(api);
     const user = await uploadAFile();
 
-    await user.click(screen.getByRole("button", { name: "Analizar imagen" }));
+    await user.click(screen.getByRole("button", { name: "Analyze image" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Mano derecha" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Right hand" })).toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: "Cara" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Face" })).toBeInTheDocument();
     expect(api.analyzedImageIds).toEqual(["fake-image-id"]);
 
-    await user.click(screen.getByRole("button", { name: "Mano derecha" }));
+    await user.click(screen.getByRole("button", { name: "Right hand" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Señal de paz/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Peace sign/ })).toBeInTheDocument();
     });
-    expect(screen.getAllByText("Mano derecha").length).toBeGreaterThan(0); // region label + badge
+    expect(screen.getAllByText("Right hand").length).toBeGreaterThan(0); // region label + badge
 
-    await user.click(screen.getByRole("button", { name: /Señal de paz/ }));
+    await user.click(screen.getByRole("button", { name: /Peace sign/ }));
 
-    expect(await screen.findByText(/Mano derecha.*Señal de paz/)).toBeInTheDocument();
+    expect(await screen.findByText(/Right hand.*Peace sign/)).toBeInTheDocument();
   });
 
   it("switching the selected region clears the previous operation selection", async () => {
@@ -123,25 +123,25 @@ describe("EditorPage", () => {
       },
     ];
     api.operationsByRegion = {
-      right_hand: [{ operation: "peace_sign", label: "Señal de paz", emoji: "✌️" }],
-      left_hand: [{ operation: "fist", label: "Puño", emoji: "✊" }],
+      right_hand: [{ operation: "peace_sign", label: "Peace sign", emoji: "✌️" }],
+      left_hand: [{ operation: "fist", label: "Fist", emoji: "✊" }],
     };
     renderWithFakeApi(api);
     const user = await uploadAFile();
-    await user.click(screen.getByRole("button", { name: "Analizar imagen" }));
-    await waitFor(() => screen.getByRole("button", { name: "Mano derecha" }));
+    await user.click(screen.getByRole("button", { name: "Analyze image" }));
+    await waitFor(() => screen.getByRole("button", { name: "Right hand" }));
 
-    await user.click(screen.getByRole("button", { name: "Mano derecha" }));
-    await waitFor(() => screen.getByRole("button", { name: /Señal de paz/ }));
-    await user.click(screen.getByRole("button", { name: /Señal de paz/ }));
-    expect(await screen.findByText("3. Vista previa")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Right hand" }));
+    await waitFor(() => screen.getByRole("button", { name: /Peace sign/ }));
+    await user.click(screen.getByRole("button", { name: /Peace sign/ }));
+    expect(await screen.findByText("3. Preview")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Mano izquierda" }));
+    await user.click(screen.getByRole("button", { name: "Left hand" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Puño/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Fist/ })).toBeInTheDocument();
     });
-    expect(screen.queryByText("3. Vista previa")).not.toBeInTheDocument();
+    expect(screen.queryByText("3. Preview")).not.toBeInTheDocument();
   });
 
   async function setUpToOperationSelected(api: FakeImageApiPort) {
@@ -154,15 +154,15 @@ describe("EditorPage", () => {
       },
     ];
     api.operationsByRegion = {
-      right_hand: [{ operation: "peace_sign", label: "Señal de paz", emoji: "✌️" }],
+      right_hand: [{ operation: "peace_sign", label: "Peace sign", emoji: "✌️" }],
     };
     renderWithFakeApi(api);
     const user = await uploadAFile();
-    await user.click(screen.getByRole("button", { name: "Analizar imagen" }));
-    await waitFor(() => screen.getByRole("button", { name: "Mano derecha" }));
-    await user.click(screen.getByRole("button", { name: "Mano derecha" }));
-    await waitFor(() => screen.getByRole("button", { name: /Señal de paz/ }));
-    await user.click(screen.getByRole("button", { name: /Señal de paz/ }));
+    await user.click(screen.getByRole("button", { name: "Analyze image" }));
+    await waitFor(() => screen.getByRole("button", { name: "Right hand" }));
+    await user.click(screen.getByRole("button", { name: "Right hand" }));
+    await waitFor(() => screen.getByRole("button", { name: /Peace sign/ }));
+    await user.click(screen.getByRole("button", { name: /Peace sign/ }));
     return user;
   }
 
@@ -177,10 +177,10 @@ describe("EditorPage", () => {
     api.nextConfirmResult = { editId: "edit-1", finalUrl: "http://example.test/static/preview/final.png" };
     const user = await setUpToOperationSelected(api);
 
-    await user.click(screen.getByRole("button", { name: "Generar vista previa" }));
+    await user.click(screen.getByRole("button", { name: "Generate preview" }));
 
     await waitFor(() => {
-      expect(screen.getByAltText("Después")).toHaveAttribute(
+      expect(screen.getByAltText("After")).toHaveAttribute(
         "src",
         "http://example.test/static/preview/edit-1.png",
       );
@@ -189,17 +189,17 @@ describe("EditorPage", () => {
       { imageId: "fake-image-id", regionId: "region-hand", operation: "peace_sign" },
     ]);
 
-    await user.click(screen.getByRole("button", { name: "Aceptar" }));
+    await user.click(screen.getByRole("button", { name: "Accept" }));
 
     await waitFor(() => {
-      expect(screen.getByAltText("Imagen subida")).toHaveAttribute(
+      expect(screen.getByAltText("Uploaded image")).toHaveAttribute(
         "src",
         "http://example.test/static/preview/final.png",
       );
     });
     expect(api.confirmedEditIds).toEqual(["edit-1"]);
     // selection resets so the user can pick another region for a second edit
-    expect(screen.queryByText("2. Elige una transformación")).not.toBeInTheDocument();
+    expect(screen.queryByText("2. Choose a transformation")).not.toBeInTheDocument();
   });
 
   it("shows the backend's failure message and lets the user retry", async () => {
@@ -212,28 +212,28 @@ describe("EditorPage", () => {
     };
     const user = await setUpToOperationSelected(api);
 
-    await user.click(screen.getByRole("button", { name: "Generar vista previa" }));
+    await user.click(screen.getByRole("button", { name: "Generate preview" }));
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent("ComfyUI timed out");
     });
-    expect(screen.getByRole("button", { name: "Reintentar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 
   it("discarding a preview clears it but keeps the operation gallery open", async () => {
     const api = new FakeImageApiPort();
     const user = await setUpToOperationSelected(api);
 
-    await user.click(screen.getByRole("button", { name: "Generar vista previa" }));
-    await waitFor(() => screen.getByRole("button", { name: "Descartar" }));
+    await user.click(screen.getByRole("button", { name: "Generate preview" }));
+    await waitFor(() => screen.getByRole("button", { name: "Discard" }));
 
-    await user.click(screen.getByRole("button", { name: "Descartar" }));
+    await user.click(screen.getByRole("button", { name: "Discard" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Generar vista previa" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Generate preview" })).toBeInTheDocument();
     });
     expect(api.discardedEditIds).toEqual(["fake-edit-id"]);
     // still on the same region's operation gallery, not reset further
-    expect(screen.getByText("2. Elige una transformación")).toBeInTheDocument();
+    expect(screen.getByText("2. Choose a transformation")).toBeInTheDocument();
   });
 });

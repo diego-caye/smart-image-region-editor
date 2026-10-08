@@ -19,7 +19,7 @@ export function OperationGallery({
   if (operations.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Esta región todavía no tiene operaciones disponibles.
+        This region doesn't have any operations available yet.
       </p>
     );
   }

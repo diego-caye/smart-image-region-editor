@@ -45,7 +45,7 @@ export function EditorPage() {
       <div>
         <h1 className="text-2xl font-semibold">Smart Image Region Editor</h1>
         <p className="text-sm text-muted-foreground">
-          Sube una foto, elige una región detectada y una transformación visual.
+          Upload a photo, pick a detected region, and a visual transformation.
         </p>
       </div>
 
@@ -62,7 +62,7 @@ export function EditorPage() {
       {image && currentImageUrl && (
         <Card>
           <CardHeader>
-            <CardTitle>1. Imagen</CardTitle>
+            <CardTitle>1. Image</CardTitle>
             <CardDescription>
               {image.width}×{image.height}px
             </CardDescription>
@@ -79,13 +79,13 @@ export function EditorPage() {
 
             {analysisStatus === "idle" && (
               <Button onClick={analyze} className="self-start">
-                Analizar imagen
+                Analyze image
               </Button>
             )}
             {analysisStatus === "analyzing" && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Skeleton className="h-4 w-4 rounded-full" />
-                Detectando cara y manos…
+                Detecting regions…
               </div>
             )}
             {analysisStatus === "error" && (
@@ -94,15 +94,15 @@ export function EditorPage() {
                   {analysisError}
                 </p>
                 <Button onClick={analyze} variant="outline" className="self-start">
-                  Reintentar
+                  Retry
                 </Button>
               </div>
             )}
             {analysisStatus === "ready" && (
               <p className="text-sm text-muted-foreground">
                 {regions.length > 0
-                  ? "Toca una región resaltada en la imagen para editarla."
-                  : "No se detectó ninguna región en esta imagen."}
+                  ? "Tap a highlighted region in the image to edit it."
+                  : "No regions were detected in this image."}
               </p>
             )}
           </CardContent>
@@ -113,7 +113,7 @@ export function EditorPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              2. Elige una transformación
+              2. Choose a transformation
               <Badge variant="secondary">{REGION_LABELS[selectedRegion.regionType]}</Badge>
             </CardTitle>
           </CardHeader>
@@ -144,7 +144,7 @@ export function EditorPage() {
       {selectedRegion && selectedOperationEntry && (
         <Card>
           <CardHeader>
-            <CardTitle>3. Vista previa</CardTitle>
+            <CardTitle>3. Preview</CardTitle>
             <CardDescription>
               {REGION_LABELS[selectedRegion.regionType]} → {selectedOperationEntry.label}
             </CardDescription>
@@ -152,13 +152,13 @@ export function EditorPage() {
           <CardContent className="flex flex-col gap-3">
             {editGenerationStatus === "idle" && (
               <Button onClick={requestEdit} className="self-start">
-                Generar vista previa
+                Generate preview
               </Button>
             )}
             {editGenerationStatus === "generating" && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Skeleton className="h-4 w-4 rounded-full" />
-                Generando con Qwen (vía ComfyUI)… esto puede tardar unos 20-30 segundos.
+                Generating with Qwen (via ComfyUI)… this can take about 20-30 seconds.
               </div>
             )}
             {editGenerationStatus === "error" && (
@@ -167,7 +167,7 @@ export function EditorPage() {
                   {editError}
                 </p>
                 <Button onClick={requestEdit} variant="outline" className="self-start">
-                  Reintentar
+                  Retry
                 </Button>
               </div>
             )}

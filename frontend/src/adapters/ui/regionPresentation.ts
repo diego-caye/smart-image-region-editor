@@ -6,11 +6,12 @@ import type { RegionType } from "../../domain/types/RegionType";
  */
 
 export const REGION_LABELS: Record<RegionType, string> = {
-  face: "Cara",
-  left_hand: "Mano izquierda",
-  right_hand: "Mano derecha",
-  mouth: "Boca",
-  eyes: "Ojos",
+  face: "Face",
+  left_hand: "Left hand",
+  right_hand: "Right hand",
+  mouth: "Mouth",
+  eyes: "Eyes",
+  body: "Body",
 };
 
 export const REGION_COLORS: Record<RegionType, string> = {
@@ -19,4 +20,5 @@ export const REGION_COLORS: Record<RegionType, string> = {
   right_hand: "#22c55e",
   mouth: "#ec4899",
   eyes: "#a855f7",
+  body: "#0ea5e9",
 };

@@ -48,7 +48,7 @@ export function ImageUploader({ onFileSelected, isUploading }: ImageUploaderProp
         📷
       </span>
       <p className="text-sm text-muted-foreground">
-        {isUploading ? "Subiendo imagen…" : "Arrastra una foto aquí o haz clic para elegirla"}
+        {isUploading ? "Uploading image…" : "Drag a photo here or click to choose one"}
       </p>
     </div>
   );

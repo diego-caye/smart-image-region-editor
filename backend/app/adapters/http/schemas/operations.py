@@ -11,13 +11,15 @@ from app.domain.value_objects.region_type import RegionType
 # domain/services/region_operation_rules.py; this dict only decides how they
 # look in the API response the visual gallery renders from.
 _OPERATION_DISPLAY: dict[EditOperation, tuple[str, str]] = {
-    EditOperation.WAVE: ("👋", "Saludar"),
-    EditOperation.PEACE_SIGN: ("✌️", "Señal de paz"),
-    EditOperation.THUMBS_UP: ("👍", "Pulgar arriba"),
-    EditOperation.FIST: ("✊", "Puño"),
-    EditOperation.SMILE: ("🙂", "Sonrisa"),
-    EditOperation.SMILE_WITH_TEETH: ("😁", "Sonrisa con dientes"),
-    EditOperation.CLOSED_MOUTH: ("😐", "Boca cerrada"),
+    EditOperation.WAVE: ("👋", "Wave"),
+    EditOperation.PEACE_SIGN: ("✌️", "Peace sign"),
+    EditOperation.THUMBS_UP: ("👍", "Thumbs up"),
+    EditOperation.FIST: ("✊", "Fist"),
+    EditOperation.SMILE: ("🙂", "Smile"),
+    EditOperation.SMILE_WITH_TEETH: ("😁", "Smile with teeth"),
+    EditOperation.CLOSED_MOUTH: ("😐", "Closed mouth"),
+    EditOperation.OPEN_EYES: ("👀", "Open eyes"),
+    EditOperation.CLOSED_EYES: ("😌", "Closed eyes"),
 }
 
 

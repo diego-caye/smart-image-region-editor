@@ -25,20 +25,20 @@ export function PreviewComparison({
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3">
         <figure className="flex flex-col gap-1.5">
-          <img src={beforeUrl} alt="Antes" className="rounded-lg border border-border" />
-          <figcaption className="text-center text-xs text-muted-foreground">Antes</figcaption>
+          <img src={beforeUrl} alt="Before" className="rounded-lg border border-border" />
+          <figcaption className="text-center text-xs text-muted-foreground">Before</figcaption>
         </figure>
         <figure className="flex flex-col gap-1.5">
-          <img src={afterUrl} alt="Después" className="rounded-lg border border-border" />
-          <figcaption className="text-center text-xs text-muted-foreground">Después</figcaption>
+          <img src={afterUrl} alt="After" className="rounded-lg border border-border" />
+          <figcaption className="text-center text-xs text-muted-foreground">After</figcaption>
         </figure>
       </div>
       <div className="flex gap-2">
         <Button onClick={onAccept} disabled={busy}>
-          {isConfirming ? "Aceptando…" : "Aceptar"}
+          {isConfirming ? "Accepting…" : "Accept"}
         </Button>
         <Button variant="outline" onClick={onDiscard} disabled={busy}>
-          {isDiscarding ? "Descartando…" : "Descartar"}
+          {isDiscarding ? "Discarding…" : "Discard"}
         </Button>
       </div>
     </div>
