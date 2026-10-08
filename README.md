@@ -1,13 +1,32 @@
 # Smart Image Region Editor
 
-Upload a photo, the system detects regions (face, hands, mouth, eyes, body),
-you visually select a region and a predefined transformation ("✌️ Peace
-sign"), and only that region changes — the rest of the image is preserved.
-Hexagonal architecture (Ports & Adapters) in both backend and frontend.
-Includes a containerized ComfyUI, so cloning the repo and running
-`docker compose up` is enough even if you don't have ComfyUI installed. See
-[docs/architecture.md](docs/architecture.md) for the design decisions and
-their reasoning.
+Upload a photo, the system detects regions (face, hands, mouth, eyes, torso,
+arms, legs, body), you visually select a region and a predefined
+transformation ("✌️ Peace sign"), and only that region changes — the rest of
+the image is preserved. Hexagonal architecture (Ports & Adapters) in both
+backend and frontend. Includes a containerized ComfyUI, so cloning the repo
+and running `docker compose up` is enough even if you don't have ComfyUI
+installed. See [docs/architecture.md](docs/architecture.md) for the design
+decisions and their reasoning.
+
+## Screenshots
+
+**Pick a region, pick a transformation, preview before/after.** Right hand →
+"Wave": the motion-blurred hand becomes a crisp open wave, while everything
+outside the hand's mask — face, shirt, background — stays pixel-identical
+(the compositor enforces that, not the model).
+
+![Right hand → Wave, before/after preview](docs/screenshots/edit-before-after.png)
+
+**Region detection on a full-body photo** — 10 region types in one pass:
+face, eyes, mouth, hand (YOLOv8 + MediaPipe FaceLandmarker), and body,
+torso, both arms, both legs (MediaPipe PoseLandmarker).
+
+<img src="docs/screenshots/detection-full-body.png" alt="Full-body region detection" width="480">
+
+<sub>Demo photos from Unsplash, used under the
+[Unsplash License](https://unsplash.com/license): waving man by Vitaly
+Gariev, full-body portrait by Mitchell Luo.</sub>
 
 ## Current status
 
@@ -28,27 +47,25 @@ Everything marked "✅" has passing tests (unit + integration) and was also
 verified against real running processes (`uvicorn`/`docker compose` +
 `curl`, real detection on a real photo, and `vite build`).
 
-**Ports**: this project uses `8420` (backend), `5180` (frontend), and `8188`
-(ComfyUI) instead of the usual `8000`/`5173`, because the first two are
-already in use by another project on this machine.
+**Ports**: `8420` (backend), `5180` (frontend), and `8188` (ComfyUI) by
+default, rather than the usual `8000`/`5173` — all configurable in the root
+`.env`.
 
 ## Requirements
 
-- **Backend**: Python 3.12 (already installed at
-  `C:\Users\diego\AppData\Local\Programs\Python\Python312`). The project uses
-  its own venv at `backend/.venv`, not the system's default Python 3.14
-  (better compatibility with torch/ultralytics/sam2/mediapipe).
-- **Frontend**: Node.js (v24 already installed) + npm.
+- **Backend**: Python 3.12, in its own venv at `backend/.venv` (3.12 rather
+  than newer for compatibility with torch/ultralytics/sam2/mediapipe).
+- **Frontend**: Node.js 20+ and npm.
 - **ComfyUI**: only needed for a **native** run (outside Docker) — a local
-  install at `http://127.0.0.1:8188`, required starting at Phase 5 (editing),
-  not for detection/upload. **Not needed in Docker**: `docker compose up`
-  spins up its own ComfyUI container (see the Docker section below).
-- **GPU**: RTX 5080 (Blackwell). The backend uses the exact same PyTorch build
-  as ComfyUI (`torch==2.10.0+cu130`) — installing it from PyPI's normal index
-  would install a build without support for this GPU.
-- **Docker** (optional, for deployment): Docker Desktop with the `nvidia`
-  runtime enabled — already confirmed working on this machine
-  (`docker run --gpus all ... nvidia-smi` works).
+  install at `http://127.0.0.1:8188`, required for editing, not for
+  detection/upload. **Not needed in Docker**: `docker compose up` spins up
+  its own ComfyUI container (see the Docker section below).
+- **GPU**: an NVIDIA GPU. Developed on an RTX 5080 (Blackwell), which needs
+  the `cu130` PyTorch build (`torch==2.10.0+cu130`, the same one ComfyUI
+  uses) — PyPI's default index would install a build without support for
+  that GPU.
+- **Docker** (optional, for deployment): Docker with the NVIDIA container
+  runtime (check with `docker run --gpus all ... nvidia-smi`).
 
 ## Backend (native)
 
