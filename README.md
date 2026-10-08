@@ -21,7 +21,7 @@ their reasoning.
 | 5 | Localized editing via ComfyUI + composition, end-to-end (backend + frontend) | ✅ |
 | 6 | Golden dataset / evaluation | ✅ scaffolding + real `region_preservation` · `edit_quality`/`identity_preservation` are documented stubs |
 | — | Docker deployment (backend + frontend, GPU) | ✅ |
-| — | Extend to mouth/eyes/body (detection) | ✅ MediaPipe — mouth/eyes are already editable; body is detected but has no operations yet |
+| — | Extend to mouth/eyes/body/torso/limbs (detection) | ✅ MediaPipe — mouth/eyes are already editable; body, torso, arms, and legs are detected but have no operations yet |
 | — | Containerized ComfyUI (self-contained repo, no native install required) | ✅ |
 
 Everything marked "✅" has passing tests (unit + integration) and was also
@@ -82,7 +82,7 @@ Endpoints available today:
 - `POST /images` — uploads an image (multipart `file`), returns
   `{image_id, width, height, url}`.
 - `POST /images/{id}/analyze` — runs real detection (YOLOv8 face+hands +
-  MediaPipe mouth/eyes/body) and persists the found regions.
+  MediaPipe mouth/eyes/body/torso/limbs) and persists the found regions.
 - `GET /images/{id}/regions` — re-reads the already-detected regions.
 - `GET /regions/{region_type}/operations` — catalog of operations valid for a
   region type (e.g. `right_hand` → wave/peace/thumbs-up/fist).
@@ -133,9 +133,12 @@ points the `@/presentation/...` aliases at the project's hexagonal
 structure, not shadcn's default paths).
 
 The full flow works end-to-end: upload an image → **Analyze image** (real
-YOLOv8 detection) → overlay of selectable, colored boxes over the image
-(face/left hand/right hand) → click a region → visual operation gallery
-(emoji + label, never plain text) → select one → **Generate preview** (real
+YOLOv8 + MediaPipe detection, up to 11 region types: face, hands, mouth,
+eyes, body, torso, arms, legs) → overlay of selectable, colored boxes over
+the image, larger regions rendered first so smaller ones nested inside them
+(e.g. a hand inside an arm) stay clickable → click a region → visual
+operation gallery (emoji + label, never plain text) → select one →
+**Generate preview** (real
 SAM2 + Qwen Image Edit via ComfyUI, ~25-30s) → Before/After comparison →
 **Accept** (the session's image advances; a second edit is applied on top of
 this result, not the original — right hand→peace and left hand→thumbs-up

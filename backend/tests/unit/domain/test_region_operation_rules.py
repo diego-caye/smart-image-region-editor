@@ -36,6 +36,11 @@ def test_eyes_open_closed_allowed_on_eyes_not_hand():
     assert not is_operation_allowed(RegionType.RIGHT_HAND, EditOperation.CLOSED_EYES)
 
 
-def test_face_and_body_have_no_operations_yet():
+def test_face_and_body_regions_have_no_operations_yet():
     assert operations_allowed_for(RegionType.FACE) == frozenset()
     assert operations_allowed_for(RegionType.BODY) == frozenset()
+    assert operations_allowed_for(RegionType.TORSO) == frozenset()
+    assert operations_allowed_for(RegionType.LEFT_ARM) == frozenset()
+    assert operations_allowed_for(RegionType.RIGHT_ARM) == frozenset()
+    assert operations_allowed_for(RegionType.LEFT_LEG) == frozenset()
+    assert operations_allowed_for(RegionType.RIGHT_LEG) == frozenset()

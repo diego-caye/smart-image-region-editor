@@ -113,7 +113,7 @@ def test_detect_mouth_and_eyes_returns_empty_when_no_face_landmarks_found():
     assert regions == []
 
 
-def test_detect_body_returns_single_region_from_pose_landmarks():
+def test_detect_body_returns_body_plus_all_five_sub_regions():
     from app.adapters.vision.mediapipe_region_detector import _body_landmark_indices
 
     body_idx = sorted(_body_landmark_indices())
@@ -127,8 +127,14 @@ def test_detect_body_returns_single_region_from_pose_landmarks():
 
     regions = detector.detect_body(_png_bytes(400, 400), image_id=uuid4())
 
-    assert len(regions) == 1
-    assert regions[0].region_type == RegionType.BODY
+    assert {r.region_type for r in regions} == {
+        RegionType.BODY,
+        RegionType.TORSO,
+        RegionType.LEFT_ARM,
+        RegionType.RIGHT_ARM,
+        RegionType.LEFT_LEG,
+        RegionType.RIGHT_LEG,
+    }
 
 
 def test_detect_body_returns_empty_when_no_pose_found():

@@ -134,7 +134,7 @@ as a known limitation in
 improving it (e.g. with a pose model that gives real laterality via
 wrist/elbow) is a change contained to that function.
 
-### Mouth/Eyes/Body: MediaPipe, two-stage for the face, direct for the body
+### Mouth/Eyes/Body/Torso/Limbs: MediaPipe, two-stage for the face, direct for the body
 
 `MediaPipeRegionDetector` (adapters/vision) translates output from
 `MediaPipeLandmarker` (infrastructure/vision, a wrapper around
@@ -156,31 +156,59 @@ crop, and converts the indices of
 (real constants from the installed package, not hand-copied) into boxes,
 offsetting back from crop-local to full-image coordinates.
 
-**Body, no prior crop**: `PoseLandmarker` does find the pose on the full
-image (33 landmarks, verified). `detect_body()` uses the indices from
-`PoseLandmark.LEFT_SHOULDER` (11) onward, excluding the purely facial
-landmarks (0-10) already covered by face/mouth/eyes.
+**Body and its sub-regions, no prior crop**: `PoseLandmarker` does find the
+pose on the full image (33 landmarks, verified). A single
+`detect_body()` call now returns BODY (the whole shoulders-to-feet
+envelope, using the indices from `PoseLandmark.LEFT_SHOULDER` (11) onward,
+excluding the purely facial landmarks 0-10 already covered by
+face/mouth/eyes) **plus** five finer sub-regions derived from the same
+landmarks — TORSO (shoulders+hips), LEFT_ARM/RIGHT_ARM
+(shoulder→elbow→wrist→fingers), LEFT_LEG/RIGHT_LEG
+(hip→knee→ankle→heel→foot) — the same "coarse region + finer sub-regions
+coexist" pattern already used for FACE containing MOUTH/EYES. Each
+region's index set comes from a `(RegionType, indices_fn, padding_ratio)`
+table (`_BODY_PART_SPECS`) so adding another sub-region later is a one-line
+addition, not a new method.
+
+**LEFT_*/RIGHT_* convention, verified not assumed**: `PoseLandmark`'s
+`LEFT_*`/`RIGHT_*` naming is MediaPipe's own anatomical convention (the
+subject's actual left/right). Before relying on it, this was checked
+against ground truth: `person.jpg`'s already-known YOLO-detected
+`right_hand` box sits at x≈151-204, and `PoseLandmarker`'s `RIGHT_WRIST`
+landmark resolved to x≈167 — inside that same box (`LEFT_WRIST` similarly
+landed inside the `left_hand` box). So a subject facing the camera has
+their anatomical right hand on screen-left, exactly matching this
+project's existing `RegionType.RIGHT_HAND`/`LEFT_HAND` convention — no
+flipping needed between the two detectors' outputs.
 
 **Padding per region type** (`bbox_from_points`, a pure function with no
 MediaPipe dependency, tested with synthetic landmarks): mouth 0.35, eyes
-0.6, body 0.05 — proportional to the raw landmark box's size, not a fixed
-pixel margin. Confidence fixed at 0.9 for landmark-based regions: MediaPipe
-Tasks doesn't expose a single aggregate confidence score the way YOLO does;
-it's a documented value, not a calibrated one.
+0.6, body 0.05, torso 0.15, arms 0.3, legs 0.25 — proportional to the raw
+landmark box's size, not a fixed pixel margin. Arms/legs need more padding
+than torso/body because their landmarks are centerline points
+(shoulder/elbow/wrist, hip/knee/ankle) on a naturally thin limb, so the raw
+box undershoots the limb's actual visible width far more than a wider
+region like the torso does. Confidence fixed at 0.9 for landmark-based
+regions: MediaPipe Tasks doesn't expose a single aggregate confidence score
+the way YOLO does; it's a documented value, not a calibrated one.
 
 **Verified against the real photo, twice**: first in the native venv, then
 against the full stack in Docker (`docker compose up` with the
 `libegl1`/`libgles2` fix already applied) — the exact same result both
-times: all 6 region types in a single call to
+times: all 11 region types in a single call to
 `CompositeImageDetector.detect()` — face, right_hand, left_hand, mouth,
-eyes, body — with visually correct boxes. The eyes box came out very thin
-(62×7px) in this particular photo because the source face is already small
-(46×68px); that's a consequence of the source resolution, not a code bug —
-with a larger face in pixels, the eyes box scales proportionally.
+eyes, body, torso, left_arm, right_arm, left_leg, right_leg — with
+visually correct, geometrically plausible boxes (each arm box contains its
+corresponding hand box; legs span from hip height to the bottom of the
+frame). The eyes box came out very thin (62×7px) in this particular photo
+because the source face is already small (46×68px); that's a consequence
+of the source resolution, not a code bug — with a larger face in pixels,
+the eyes box scales proportionally.
 
-**BODY isn't editable yet**: `region_operation_rules.py` assigns it an empty
-`frozenset()`, same as FACE — it's detected and shown in the frontend, but
-has no operations in the catalog yet (a product decision, not a technical
+**None of BODY/TORSO/LEFT_ARM/RIGHT_ARM/LEFT_LEG/RIGHT_LEG are editable
+yet**: `region_operation_rules.py` assigns each an empty `frozenset()`,
+same as FACE — they're detected and shown in the frontend, but have no
+operations in the catalog yet (a product decision, not a technical
 limitation; see "Next steps").
 
 ### ComfyUI — real API (not invented)
@@ -476,11 +504,13 @@ differs):
 
 ## Next steps (not implemented yet)
 
-1. **Body operations**: `RegionType.BODY` is already detected
+1. **Body/torso/limb operations**: `RegionType.BODY`, `TORSO`, `LEFT_ARM`,
+   `RIGHT_ARM`, `LEFT_LEG`, and `RIGHT_LEG` are all already detected
    (`PoseLandmarker`) and shown in the frontend, but
-   `region_operation_rules.py` assigns it zero operations — a pending
-   product decision on what edits would make sense to offer (posture?
-   clothing?), not a technical limitation.
+   `region_operation_rules.py` assigns each zero operations — a pending
+   product decision on what edits would make sense to offer per region
+   (outfit color for torso/arms/legs? posture for the whole body?), not a
+   technical limitation.
 2. **Populate the golden dataset**: the schema, runner, and evaluator
    (`region_preservation`) are already ready and tested; just needs real
    photos added locally (`datasets/images/`, gitignored) and their entries

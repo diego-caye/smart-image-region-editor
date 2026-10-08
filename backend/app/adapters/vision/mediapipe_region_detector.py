@@ -1,10 +1,10 @@
-"""Implements the MOUTH/EYES/BODY portion of detection using MediaPipe's
-FaceLandmarker (cropped around an already-detected face box — see
-docs/architecture.md for why) and PoseLandmarker (run on the whole image).
-Landmark index groups (FACE_LANDMARKS_LIPS, FACE_LANDMARKS_LEFT_EYE/
-RIGHT_EYE, PoseLandmark) are imported directly from the installed
-`mediapipe` package, not hand-copied, so they stay correct if the package
-ever changes them.
+"""Implements the MOUTH/EYES/BODY/TORSO/LEFT_ARM/RIGHT_ARM/LEFT_LEG/RIGHT_LEG
+portion of detection using MediaPipe's FaceLandmarker (cropped around an
+already-detected face box — see docs/architecture.md for why) and
+PoseLandmarker (run on the whole image). Landmark index groups
+(FACE_LANDMARKS_LIPS, FACE_LANDMARKS_LEFT_EYE/RIGHT_EYE, PoseLandmark) are
+imported directly from the installed `mediapipe` package, not hand-copied,
+so they stay correct if the package ever changes them.
 
 Not a standalone ImageDetector — mouth/eyes need a face box handed in, so
 this is designed to be composed with a face/hand detector via
@@ -13,6 +13,7 @@ CompositeImageDetector, not used alone.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from io import BytesIO
 from uuid import UUID
 
@@ -33,6 +34,13 @@ _LANDMARK_REGION_CONFIDENCE = 0.9
 _MOUTH_PADDING_RATIO = 0.35
 _EYES_PADDING_RATIO = 0.6
 _BODY_PADDING_RATIO = 0.05
+# Limbs are thin relative to their landmark bounding box's diagonal (the
+# landmarks are centerline points, e.g. shoulder/elbow/wrist), so arms/legs
+# need more padding than the whole-body envelope to actually cover the
+# limb's visible width/sleeve/pant leg.
+_TORSO_PADDING_RATIO = 0.15
+_ARM_PADDING_RATIO = 0.3
+_LEG_PADDING_RATIO = 0.25
 
 
 def _lip_indices() -> set[int]:
@@ -62,6 +70,83 @@ def _body_landmark_indices() -> set[int]:
     # landmarks (nose/eyes/ears/mouth, 0-10), which the face/mouth/eyes
     # detectors already cover.
     return {landmark.value for landmark in PoseLandmark if landmark.value >= PoseLandmark.LEFT_SHOULDER}
+
+
+def _torso_indices() -> set[int]:
+    from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmark
+
+    return {
+        PoseLandmark.LEFT_SHOULDER.value,
+        PoseLandmark.RIGHT_SHOULDER.value,
+        PoseLandmark.LEFT_HIP.value,
+        PoseLandmark.RIGHT_HIP.value,
+    }
+
+
+def _left_arm_indices() -> set[int]:
+    from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmark
+
+    return {
+        PoseLandmark.LEFT_SHOULDER.value,
+        PoseLandmark.LEFT_ELBOW.value,
+        PoseLandmark.LEFT_WRIST.value,
+        PoseLandmark.LEFT_PINKY.value,
+        PoseLandmark.LEFT_INDEX.value,
+        PoseLandmark.LEFT_THUMB.value,
+    }
+
+
+def _right_arm_indices() -> set[int]:
+    from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmark
+
+    return {
+        PoseLandmark.RIGHT_SHOULDER.value,
+        PoseLandmark.RIGHT_ELBOW.value,
+        PoseLandmark.RIGHT_WRIST.value,
+        PoseLandmark.RIGHT_PINKY.value,
+        PoseLandmark.RIGHT_INDEX.value,
+        PoseLandmark.RIGHT_THUMB.value,
+    }
+
+
+def _left_leg_indices() -> set[int]:
+    from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmark
+
+    return {
+        PoseLandmark.LEFT_HIP.value,
+        PoseLandmark.LEFT_KNEE.value,
+        PoseLandmark.LEFT_ANKLE.value,
+        PoseLandmark.LEFT_HEEL.value,
+        PoseLandmark.LEFT_FOOT_INDEX.value,
+    }
+
+
+def _right_leg_indices() -> set[int]:
+    from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmark
+
+    return {
+        PoseLandmark.RIGHT_HIP.value,
+        PoseLandmark.RIGHT_KNEE.value,
+        PoseLandmark.RIGHT_ANKLE.value,
+        PoseLandmark.RIGHT_HEEL.value,
+        PoseLandmark.RIGHT_FOOT_INDEX.value,
+    }
+
+
+# (region_type, index-set factory, padding ratio) for every region derived
+# from a single PoseLandmarker call. LEFT_*/RIGHT_* here is PoseLandmarker's
+# own anatomical convention — verified against a real photo's already-known
+# YOLO hand boxes to already match this project's RegionType.LEFT_HAND/
+# RIGHT_HAND convention (a subject facing the camera has their anatomical
+# right hand on screen-left), so no flipping is needed.
+_BODY_PART_SPECS: tuple[tuple[RegionType, Callable[[], set[int]], float], ...] = (
+    (RegionType.BODY, _body_landmark_indices, _BODY_PADDING_RATIO),
+    (RegionType.TORSO, _torso_indices, _TORSO_PADDING_RATIO),
+    (RegionType.LEFT_ARM, _left_arm_indices, _ARM_PADDING_RATIO),
+    (RegionType.RIGHT_ARM, _right_arm_indices, _ARM_PADDING_RATIO),
+    (RegionType.LEFT_LEG, _left_leg_indices, _LEG_PADDING_RATIO),
+    (RegionType.RIGHT_LEG, _right_leg_indices, _LEG_PADDING_RATIO),
+)
 
 
 def bbox_from_points(
@@ -135,6 +220,12 @@ class MediaPipeRegionDetector:
         return regions
 
     def detect_body(self, image_bytes: bytes, *, image_id: UUID) -> list[DetectedRegion]:
+        """Returns BODY (the whole shoulders-to-feet envelope) plus its five
+        sub-regions (TORSO, LEFT_ARM, RIGHT_ARM, LEFT_LEG, RIGHT_LEG) from a
+        single PoseLandmarker call — the same "coarse region + finer
+        sub-regions coexist" pattern as FACE containing MOUTH/EYES. A
+        sub-region is silently skipped if its own landmarks are missing,
+        rather than failing the whole call."""
         image = PILImage.open(BytesIO(image_bytes)).convert("RGB")
         image_rgb = np.array(image)
 
@@ -142,24 +233,25 @@ class MediaPipeRegionDetector:
         if landmarks is None:
             return []
 
-        body_box = bbox_from_points(
-            landmarks.points,
-            _body_landmark_indices(),
-            width=landmarks.image_width,
-            height=landmarks.image_height,
-            padding_ratio=_BODY_PADDING_RATIO,
-        )
-        if body_box is None:
-            return []
-
-        return [
-            DetectedRegion.new(
-                image_id=image_id,
-                region_type=RegionType.BODY,
-                bounding_box=body_box,
-                confidence=_LANDMARK_REGION_CONFIDENCE,
+        regions: list[DetectedRegion] = []
+        for region_type, indices_fn, padding_ratio in _BODY_PART_SPECS:
+            box = bbox_from_points(
+                landmarks.points,
+                indices_fn(),
+                width=landmarks.image_width,
+                height=landmarks.image_height,
+                padding_ratio=padding_ratio,
             )
-        ]
+            if box is not None:
+                regions.append(
+                    DetectedRegion.new(
+                        image_id=image_id,
+                        region_type=region_type,
+                        bounding_box=box,
+                        confidence=_LANDMARK_REGION_CONFIDENCE,
+                    )
+                )
+        return regions
 
 
 def _region_offset_by_crop(

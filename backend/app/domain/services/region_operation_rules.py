@@ -23,6 +23,11 @@ _ALLOWED_OPERATIONS: dict[RegionType, frozenset[EditOperation]] = {
     # much larger, riskier edit than a single gesture/expression).
     RegionType.FACE: frozenset(),
     RegionType.BODY: frozenset(),
+    RegionType.TORSO: frozenset(),
+    RegionType.LEFT_ARM: frozenset(),
+    RegionType.RIGHT_ARM: frozenset(),
+    RegionType.LEFT_LEG: frozenset(),
+    RegionType.RIGHT_LEG: frozenset(),
 }
 
 
