@@ -9,10 +9,15 @@ Entries with a `source_url` are downloaded into datasets/images/
 (gitignored) on first run, so the bundled entries work on a fresh clone.
 Entries without one, whose image isn't present locally, are skipped — that
 is how you add your own photos without committing them.
+
+Set GOLDEN_OUTPUT_DIR to also write each entry's final image there
+(`<id>.png`), for eyeballing what the scores mean.
 """
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -80,6 +85,11 @@ def test_golden_entry(entry: dict):
         operation,
         min_score=entry.get("min_quality_score", 0.5),
     )
+
+    if output_dir := os.environ.get("GOLDEN_OUTPUT_DIR"):
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        (Path(output_dir) / f"{entry['id']}.png").write_bytes(final_bytes)
+    print(f"{entry['id']}: edit_quality {quality.notes}")
 
     problems = []
     if not preservation.passed:

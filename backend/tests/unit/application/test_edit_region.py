@@ -185,3 +185,33 @@ def test_mask_is_only_segmented_once_and_then_reused():
     )
 
     assert segment_calls["count"] == 1
+
+
+@pytest.mark.parametrize(
+    ("region_type", "operation", "expected_grow_px"),
+    [
+        # a gesture can reach past the original outline...
+        (RegionType.RIGHT_HAND, EditOperation.PEACE_SIGN, 40),
+        # ...a garment can't, so its margin stays tight
+        (RegionType.TORSO, EditOperation.RED_SHIRT, 16),
+    ],
+)
+def test_mask_grow_depends_on_the_region_type(region_type, operation, expected_grow_px):
+    storage = FakeImageStorage()
+    repo = FakeImageRepository()
+    uploaded, region = _setup_image_with_region(storage, repo, region_type=region_type)
+
+    grow_px_seen = []
+
+    class RecordingCompositor(FakeImageCompositor):
+        def composite(self, *, grow_px, **kwargs):
+            grow_px_seen.append(grow_px)
+            return super().composite(grow_px=grow_px, **kwargs)
+
+    EditRegionUseCase(
+        repo, storage, FakeImageSegmenter(), FakeImageEditor(), RecordingCompositor()
+    ).execute(
+        EditRegionRequest(image_id=uploaded.image_id, region_id=region.id, operation=operation)
+    )
+
+    assert grow_px_seen == [expected_grow_px]
