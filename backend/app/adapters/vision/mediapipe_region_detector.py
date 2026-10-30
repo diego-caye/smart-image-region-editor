@@ -1,5 +1,5 @@
-"""Implements the MOUTH/EYES/BODY/TORSO/LEFT_ARM/RIGHT_ARM/LEFT_LEG/RIGHT_LEG
-portion of detection using MediaPipe's FaceLandmarker (cropped around an
+"""Implements the MOUTH/EYES/BODY/TORSO/LEFT_ARM/RIGHT_ARM/LEGS portion of
+detection using MediaPipe's FaceLandmarker (cropped around an
 already-detected face box — see docs/architecture.md for why) and
 PoseLandmarker (run on the whole image). Landmark index groups
 (FACE_LANDMARKS_LIPS, FACE_LANDMARKS_LEFT_EYE/RIGHT_EYE, PoseLandmark) are
@@ -34,13 +34,13 @@ _LANDMARK_REGION_CONFIDENCE = 0.9
 _MOUTH_PADDING_RATIO = 0.35
 _EYES_PADDING_RATIO = 0.6
 _BODY_PADDING_RATIO = 0.05
-# Limbs are thin relative to their landmark bounding box's diagonal (the
-# landmarks are centerline points, e.g. shoulder/elbow/wrist), so arms/legs
-# need more padding than the whole-body envelope to actually cover the
-# limb's visible width/sleeve/pant leg.
+# An arm is thin relative to its landmark bounding box (the landmarks are
+# centerline points — shoulder/elbow/wrist), so it needs more padding than
+# the whole-body envelope to cover the sleeve's actual width. Both legs
+# together already span hip to hip, so they need less.
 _TORSO_PADDING_RATIO = 0.15
 _ARM_PADDING_RATIO = 0.3
-_LEG_PADDING_RATIO = 0.25
+_LEGS_PADDING_RATIO = 0.15
 
 
 def _lip_indices() -> set[int]:
@@ -109,7 +109,7 @@ def _right_arm_indices() -> set[int]:
     }
 
 
-def _left_leg_indices() -> set[int]:
+def _legs_indices() -> set[int]:
     from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmark
 
     return {
@@ -118,13 +118,6 @@ def _left_leg_indices() -> set[int]:
         PoseLandmark.LEFT_ANKLE.value,
         PoseLandmark.LEFT_HEEL.value,
         PoseLandmark.LEFT_FOOT_INDEX.value,
-    }
-
-
-def _right_leg_indices() -> set[int]:
-    from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmark
-
-    return {
         PoseLandmark.RIGHT_HIP.value,
         PoseLandmark.RIGHT_KNEE.value,
         PoseLandmark.RIGHT_ANKLE.value,
@@ -144,8 +137,7 @@ _BODY_PART_SPECS: tuple[tuple[RegionType, Callable[[], set[int]], float], ...] =
     (RegionType.TORSO, _torso_indices, _TORSO_PADDING_RATIO),
     (RegionType.LEFT_ARM, _left_arm_indices, _ARM_PADDING_RATIO),
     (RegionType.RIGHT_ARM, _right_arm_indices, _ARM_PADDING_RATIO),
-    (RegionType.LEFT_LEG, _left_leg_indices, _LEG_PADDING_RATIO),
-    (RegionType.RIGHT_LEG, _right_leg_indices, _LEG_PADDING_RATIO),
+    (RegionType.LEGS, _legs_indices, _LEGS_PADDING_RATIO),
 )
 
 
@@ -231,8 +223,8 @@ class MediaPipeRegionDetector:
         return regions
 
     def detect_body(self, image_bytes: bytes, *, image_id: UUID) -> list[DetectedRegion]:
-        """Returns BODY (the whole shoulders-to-feet envelope) plus its five
-        sub-regions (TORSO, LEFT_ARM, RIGHT_ARM, LEFT_LEG, RIGHT_LEG) from a
+        """Returns BODY (the whole shoulders-to-feet envelope) plus its four
+        sub-regions (TORSO, LEFT_ARM, RIGHT_ARM, LEGS) from a
         single PoseLandmarker call — the same "coarse region + finer
         sub-regions coexist" pattern as FACE containing MOUTH/EYES. A
         sub-region is silently skipped if its own landmarks are missing,

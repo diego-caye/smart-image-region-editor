@@ -16,6 +16,12 @@ from app.domain.value_objects.edit_operation import EditOperation
 _PRESERVE_CLAUSE = (
     " Keep the skin tone, clothing, lighting, art style and background exactly the same."
 )
+# Garment edits can't use _PRESERVE_CLAUSE — "keep the clothing the same"
+# would contradict the instruction itself.
+_GARMENT_PRESERVE_CLAUSE = (
+    " Keep the person's pose, body shape, skin, hands, lighting, art style and"
+    " background exactly the same."
+)
 
 _PROMPTS: dict[EditOperation, str] = {
     EditOperation.WAVE: (
@@ -60,6 +66,40 @@ _PROMPTS: dict[EditOperation, str] = {
     EditOperation.CLOSED_EYES: (
         "Change the eyes to be gently closed, as if blinking or relaxed, eyelids "
         "fully down."
+        + _PRESERVE_CLAUSE
+    ),
+    EditOperation.RED_SHIRT: (
+        "Change the shirt on the upper body, including its sleeves, to a solid "
+        "bright red color, keeping the same cut, fit and fabric folds."
+        + _GARMENT_PRESERVE_CLAUSE
+    ),
+    EditOperation.BLACK_JACKET: (
+        "Dress the upper body in a black jacket, sleeves included, fitted "
+        "naturally to the pose with realistic fabric folds."
+        + _GARMENT_PRESERVE_CLAUSE
+    ),
+    EditOperation.WHITE_TSHIRT: (
+        "Change the top on the upper body into a plain white crew-neck "
+        "T-shirt, fitted naturally to the pose."
+        + _GARMENT_PRESERVE_CLAUSE
+    ),
+    EditOperation.BLUE_JEANS: (
+        "Change the pants on both legs into classic blue denim jeans, keeping "
+        "the same fit and length, with fabric folds following the pose."
+        + _GARMENT_PRESERVE_CLAUSE
+    ),
+    EditOperation.SHORTS: (
+        "Change the pants on both legs into knee-length shorts, showing the "
+        "lower legs below the knees with natural skin, same shoes."
+        + _GARMENT_PRESERVE_CLAUSE
+    ),
+    EditOperation.WRISTWATCH: (
+        "Add a classic wristwatch with a round metal case and a dark leather "
+        "strap on the wrist."
+        + _PRESERVE_CLAUSE
+    ),
+    EditOperation.BRACELET: (
+        "Add a simple thin bracelet around the wrist."
         + _PRESERVE_CLAUSE
     ),
 }

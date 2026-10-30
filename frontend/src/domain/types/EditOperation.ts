@@ -12,4 +12,11 @@ export type EditOperation =
   | "smile_with_teeth"
   | "closed_mouth"
   | "open_eyes"
-  | "closed_eyes";
+  | "closed_eyes"
+  | "red_shirt"
+  | "black_jacket"
+  | "white_tshirt"
+  | "blue_jeans"
+  | "shorts"
+  | "wristwatch"
+  | "bracelet";

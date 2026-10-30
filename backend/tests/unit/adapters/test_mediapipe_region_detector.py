@@ -142,24 +142,23 @@ def test_detect_body_returns_body_plus_all_five_sub_regions():
         RegionType.TORSO,
         RegionType.LEFT_ARM,
         RegionType.RIGHT_ARM,
-        RegionType.LEFT_LEG,
-        RegionType.RIGHT_LEG,
+        RegionType.LEGS,
     }
 
 
 def test_detect_body_skips_a_sub_region_whose_landmarks_collapsed_instead_of_crashing():
     from app.adapters.vision.mediapipe_region_detector import (
         _body_landmark_indices,
-        _left_leg_indices,
+        _legs_indices,
     )
 
     body_idx = sorted(_body_landmark_indices())
     points = [(0.5, 0.5)] * (max(body_idx) + 1)
     for offset, i in enumerate(body_idx):
         points[i] = (0.3 + 0.001 * offset, 0.7 + 0.001 * offset)
-    # Simulate an out-of-frame leg: every LEFT_LEG landmark collapsed to the
-    # exact same point, as a real half-body photo produced in production.
-    for i in _left_leg_indices():
+    # Simulate out-of-frame legs: every leg landmark collapsed to the exact
+    # same point, as a real half-body photo produced in production.
+    for i in _legs_indices():
         points[i] = (0.42, 0.9)
 
     landmarks = Landmarks(points=points, image_width=400, image_height=400)
@@ -169,9 +168,9 @@ def test_detect_body_skips_a_sub_region_whose_landmarks_collapsed_instead_of_cra
     regions = detector.detect_body(_png_bytes(400, 400), image_id=uuid4())
 
     region_types = {r.region_type for r in regions}
-    assert RegionType.LEFT_LEG not in region_types
+    assert RegionType.LEGS not in region_types
     assert RegionType.BODY in region_types
-    assert RegionType.RIGHT_LEG in region_types
+    assert RegionType.TORSO in region_types
 
 
 def test_detect_body_returns_empty_when_no_pose_found():

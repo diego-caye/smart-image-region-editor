@@ -27,3 +27,16 @@ class EditOperation(StrEnum):
     # Eyes
     OPEN_EYES = "open_eyes"
     CLOSED_EYES = "closed_eyes"
+
+    # Upper-body garments (torso)
+    RED_SHIRT = "red_shirt"
+    BLACK_JACKET = "black_jacket"
+    WHITE_TSHIRT = "white_tshirt"
+
+    # Lower-body garments (both legs)
+    BLUE_JEANS = "blue_jeans"
+    SHORTS = "shorts"
+
+    # Arm accessories
+    WRISTWATCH = "wristwatch"
+    BRACELET = "bracelet"

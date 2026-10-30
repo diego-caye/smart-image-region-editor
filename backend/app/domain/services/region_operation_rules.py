@@ -3,31 +3,33 @@ from __future__ import annotations
 from app.domain.value_objects.edit_operation import EditOperation
 from app.domain.value_objects.region_type import RegionType
 
+_HAND_GESTURES = frozenset(
+    {EditOperation.WAVE, EditOperation.PEACE_SIGN, EditOperation.THUMBS_UP, EditOperation.FIST}
+)
+_ARM_ACCESSORIES = frozenset({EditOperation.WRISTWATCH, EditOperation.BRACELET})
+
 # Which EditOperations make sense for which RegionType. This is a domain rule:
 # "a peace sign is a thing you do with a hand" is true regardless of which
 # framework renders the picker or which model performs the edit — it belongs
 # here, not scattered across the HTTP layer or the ComfyUI adapter.
 _ALLOWED_OPERATIONS: dict[RegionType, frozenset[EditOperation]] = {
-    RegionType.LEFT_HAND: frozenset(
-        {EditOperation.WAVE, EditOperation.PEACE_SIGN, EditOperation.THUMBS_UP, EditOperation.FIST}
-    ),
-    RegionType.RIGHT_HAND: frozenset(
-        {EditOperation.WAVE, EditOperation.PEACE_SIGN, EditOperation.THUMBS_UP, EditOperation.FIST}
-    ),
+    RegionType.LEFT_HAND: _HAND_GESTURES,
+    RegionType.RIGHT_HAND: _HAND_GESTURES,
     RegionType.MOUTH: frozenset(
         {EditOperation.SMILE, EditOperation.SMILE_WITH_TEETH, EditOperation.CLOSED_MOUTH}
     ),
     RegionType.EYES: frozenset({EditOperation.OPEN_EYES, EditOperation.CLOSED_EYES}),
-    # Detected and shown, not yet editable — same MVP stance FACE already
-    # had (no whole-face/whole-body operation makes sense yet without a
-    # much larger, riskier edit than a single gesture/expression).
+    RegionType.TORSO: frozenset(
+        {EditOperation.RED_SHIRT, EditOperation.BLACK_JACKET, EditOperation.WHITE_TSHIRT}
+    ),
+    RegionType.LEFT_ARM: _ARM_ACCESSORIES,
+    RegionType.RIGHT_ARM: _ARM_ACCESSORIES,
+    RegionType.LEGS: frozenset({EditOperation.BLUE_JEANS, EditOperation.SHORTS}),
+    # Detected and shown, not yet editable — no whole-face/whole-body
+    # operation makes sense yet without a much larger, riskier edit than a
+    # single gesture, expression, or garment.
     RegionType.FACE: frozenset(),
     RegionType.BODY: frozenset(),
-    RegionType.TORSO: frozenset(),
-    RegionType.LEFT_ARM: frozenset(),
-    RegionType.RIGHT_ARM: frozenset(),
-    RegionType.LEFT_LEG: frozenset(),
-    RegionType.RIGHT_LEG: frozenset(),
 }
 
 

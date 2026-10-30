@@ -36,11 +36,24 @@ def test_eyes_open_closed_allowed_on_eyes_not_hand():
     assert not is_operation_allowed(RegionType.RIGHT_HAND, EditOperation.CLOSED_EYES)
 
 
-def test_face_and_body_regions_have_no_operations_yet():
+def test_face_and_whole_body_have_no_operations_yet():
     assert operations_allowed_for(RegionType.FACE) == frozenset()
     assert operations_allowed_for(RegionType.BODY) == frozenset()
-    assert operations_allowed_for(RegionType.TORSO) == frozenset()
-    assert operations_allowed_for(RegionType.LEFT_ARM) == frozenset()
-    assert operations_allowed_for(RegionType.RIGHT_ARM) == frozenset()
-    assert operations_allowed_for(RegionType.LEFT_LEG) == frozenset()
-    assert operations_allowed_for(RegionType.RIGHT_LEG) == frozenset()
+
+
+def test_garments_go_on_the_region_they_cover():
+    assert is_operation_allowed(RegionType.TORSO, EditOperation.RED_SHIRT)
+    assert is_operation_allowed(RegionType.LEGS, EditOperation.BLUE_JEANS)
+    assert not is_operation_allowed(RegionType.LEGS, EditOperation.RED_SHIRT)
+    assert not is_operation_allowed(RegionType.TORSO, EditOperation.BLUE_JEANS)
+
+
+def test_accessories_allowed_on_either_arm_but_not_torso():
+    assert is_operation_allowed(RegionType.LEFT_ARM, EditOperation.WRISTWATCH)
+    assert is_operation_allowed(RegionType.RIGHT_ARM, EditOperation.BRACELET)
+    assert not is_operation_allowed(RegionType.TORSO, EditOperation.WRISTWATCH)
+
+
+def test_every_operation_is_reachable_from_some_region():
+    reachable = set().union(*(operations_allowed_for(r) for r in RegionType))
+    assert reachable == set(EditOperation)

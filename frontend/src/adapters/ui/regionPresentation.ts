@@ -15,8 +15,7 @@ export const REGION_LABELS: Record<RegionType, string> = {
   torso: "Torso",
   left_arm: "Left arm",
   right_arm: "Right arm",
-  left_leg: "Left leg",
-  right_leg: "Right leg",
+  legs: "Legs",
 };
 
 export const REGION_COLORS: Record<RegionType, string> = {
@@ -29,6 +28,5 @@ export const REGION_COLORS: Record<RegionType, string> = {
   torso: "#eab308",
   left_arm: "#14b8a6",
   right_arm: "#f43f5e",
-  left_leg: "#84cc16",
-  right_leg: "#6366f1",
+  legs: "#6366f1",
 };

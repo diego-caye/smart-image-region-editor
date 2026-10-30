@@ -10,16 +10,12 @@ from app.domain.ports.image_editor import ImageEditor
 from app.domain.ports.image_repository import ImageRepository
 from app.domain.ports.image_segmenter import ImageSegmenter
 from app.domain.ports.image_storage import ImageStorage
+from app.domain.services.mask_rules import mask_grow_px_for
 from app.domain.services.region_operation_rules import ensure_operation_allowed
 
 if TYPE_CHECKING:
     from app.domain.entities.region import DetectedRegion
 
-# Generous on purpose: an edit can change a region's silhouette (a closed
-# fist opening into a spread-finger peace sign extends well past the
-# fist's own outline) — a tight mask would clip the new shape. See
-# PillowImageCompositor.
-DEFAULT_MASK_GROW_PX = 40
 DEFAULT_MASK_FEATHER_PX = 12
 
 
@@ -50,7 +46,6 @@ class EditRegionUseCase:
         image_segmenter: ImageSegmenter,
         image_editor: ImageEditor,
         image_compositor: ImageCompositor,
-        mask_grow_px: int = DEFAULT_MASK_GROW_PX,
         mask_feather_px: int = DEFAULT_MASK_FEATHER_PX,
     ) -> None:
         self._repo = image_repository
@@ -58,7 +53,6 @@ class EditRegionUseCase:
         self._segmenter = image_segmenter
         self._editor = image_editor
         self._compositor = image_compositor
-        self._mask_grow_px = mask_grow_px
         self._mask_feather_px = mask_feather_px
 
     def execute(self, request: EditRegionRequest) -> EditRegionResult:
@@ -142,7 +136,7 @@ class EditRegionUseCase:
             width=segmentation.width,
             height=segmentation.height,
             feather_px=self._mask_feather_px,
-            grow_px=self._mask_grow_px,
+            grow_px=mask_grow_px_for(region.region_type),
         )
         self._repo.save_mask(mask)
         self._repo.update_region(region.with_mask(mask.id))

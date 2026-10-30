@@ -20,6 +20,13 @@ _OPERATION_DISPLAY: dict[EditOperation, tuple[str, str]] = {
     EditOperation.CLOSED_MOUTH: ("😐", "Closed mouth"),
     EditOperation.OPEN_EYES: ("👀", "Open eyes"),
     EditOperation.CLOSED_EYES: ("😌", "Closed eyes"),
+    EditOperation.RED_SHIRT: ("👔", "Red shirt"),
+    EditOperation.BLACK_JACKET: ("🧥", "Black jacket"),
+    EditOperation.WHITE_TSHIRT: ("👕", "White T-shirt"),
+    EditOperation.BLUE_JEANS: ("👖", "Blue jeans"),
+    EditOperation.SHORTS: ("🩳", "Shorts"),
+    EditOperation.WRISTWATCH: ("⌚", "Wristwatch"),
+    EditOperation.BRACELET: ("📿", "Bracelet"),
 }
 
 
