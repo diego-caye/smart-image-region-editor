@@ -37,6 +37,11 @@ dev = [
     "pytest-cov>=6.0",
     "ruff>=0.7",
 ]
+# CLIP for the golden dataset's edit_quality evaluator. Test-only, so it
+# stays out of the backend Docker image (which installs .[dev,ml]).
+eval = [
+    "transformers>=4.46",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

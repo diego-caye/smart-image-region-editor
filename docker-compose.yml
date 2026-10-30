@@ -4,12 +4,19 @@ services:
   # reachable directly at http://localhost:${COMFYUI_PORT:-8188} if you want
   # to inspect the workflow graph or queue by hand. Models are downloaded
   # into the comfyui_data volume on first start (see comfyui/entrypoint.sh);
-  # this takes a while (~15GB) but only happens once.
+  # this takes a while (~31GB) but only happens once.
   comfyui:
     build:
       context: ./comfyui
     ports:
       - "${COMFYUI_PORT:-8188}:8188"
+    environment:
+      # Defaults assume the GPU is shared with other software:
+      # --disable-smart-memory offloads models to RAM after each edit instead
+      # of holding VRAM while idle, and --reserve-vram leaves that many GB for
+      # everything else. Edits get slower (models reload each time); set
+      # COMFYUI_EXTRA_ARGS to empty in .env if this is the only GPU workload.
+      COMFYUI_EXTRA_ARGS: ${COMFYUI_EXTRA_ARGS---disable-smart-memory --reserve-vram 4}
     volumes:
       - comfyui_data:/data
     # Remove this whole `deploy` block to run ComfyUI CPU-only on a machine

@@ -25,7 +25,9 @@ app/
     ports/            image_repository, image_storage, image_detector,
                        image_segmenter, image_editor, image_compositor
     services/          region_operation_rules.py — which operations are
-                       valid for which region type (business rule)
+                       valid for which region type (business rule);
+                       mask_rules.py — how far past its outline an edit
+                       to each region type may reach
   application/
     use_cases/         upload_image, analyze_image, get_detected_regions,
                        list_operations_for_region, edit_region,
@@ -161,14 +163,19 @@ pose on the full image (33 landmarks, verified). A single
 `detect_body()` call now returns BODY (the whole shoulders-to-feet
 envelope, using the indices from `PoseLandmark.LEFT_SHOULDER` (11) onward,
 excluding the purely facial landmarks 0-10 already covered by
-face/mouth/eyes) **plus** five finer sub-regions derived from the same
+face/mouth/eyes) **plus** four finer sub-regions derived from the same
 landmarks — TORSO (shoulders+hips), LEFT_ARM/RIGHT_ARM
-(shoulder→elbow→wrist→fingers), LEFT_LEG/RIGHT_LEG
-(hip→knee→ankle→heel→foot) — the same "coarse region + finer sub-regions
-coexist" pattern already used for FACE containing MOUTH/EYES. Each
-region's index set comes from a `(RegionType, indices_fn, padding_ratio)`
-table (`_BODY_PART_SPECS`) so adding another sub-region later is a one-line
-addition, not a new method.
+(shoulder→elbow→wrist→fingers), LEGS (both hips→knees→ankles→feet) — the
+same "coarse region + finer sub-regions coexist" pattern already used for
+FACE containing MOUTH/EYES. Each region's index set comes from a
+`(RegionType, indices_fn, padding_ratio)` table (`_BODY_PART_SPECS`) so
+adding another sub-region later is a one-line addition, not a new method.
+
+**Why arms are split per side but legs aren't**: legs started out as
+LEFT_LEG/RIGHT_LEG too, and were merged into one LEGS region once they got
+operations. A garment covers both legs — editing one alone would leave one
+leg in jeans and the other in the original pants. An accessory (watch,
+bracelet), by contrast, genuinely belongs on one arm.
 
 **LEFT_*/RIGHT_* convention, verified not assumed**: `PoseLandmark`'s
 `LEFT_*`/`RIGHT_*` naming is MediaPipe's own anatomical convention (the
@@ -183,33 +190,35 @@ flipping needed between the two detectors' outputs.
 
 **Padding per region type** (`bbox_from_points`, a pure function with no
 MediaPipe dependency, tested with synthetic landmarks): mouth 0.35, eyes
-0.6, body 0.05, torso 0.15, arms 0.3, legs 0.25 — proportional to the raw
-landmark box's size, not a fixed pixel margin. Arms/legs need more padding
-than torso/body because their landmarks are centerline points
-(shoulder/elbow/wrist, hip/knee/ankle) on a naturally thin limb, so the raw
-box undershoots the limb's actual visible width far more than a wider
-region like the torso does. Confidence fixed at 0.9 for landmark-based
+0.6, body 0.05, torso 0.15, arms 0.3, legs 0.15 — proportional to the raw
+landmark box's size, not a fixed pixel margin. Arms need more padding than
+the rest because their landmarks are centerline points
+(shoulder/elbow/wrist) on a naturally thin limb, so the raw box undershoots
+the sleeve's actual visible width; both legs together already span hip to
+hip. Confidence fixed at 0.9 for landmark-based
 regions: MediaPipe Tasks doesn't expose a single aggregate confidence score
 the way YOLO does; it's a documented value, not a calibrated one.
 
 **Verified against the real photo, twice**: first in the native venv, then
 against the full stack in Docker (`docker compose up` with the
 `libegl1`/`libgles2` fix already applied) — the exact same result both
-times: all 11 region types in a single call to
-`CompositeImageDetector.detect()` — face, right_hand, left_hand, mouth,
-eyes, body, torso, left_arm, right_arm, left_leg, right_leg — with
-visually correct, geometrically plausible boxes (each arm box contains its
-corresponding hand box; legs span from hip height to the bottom of the
-frame). The eyes box came out very thin (62×7px) in this particular photo
-because the source face is already small (46×68px); that's a consequence
-of the source resolution, not a code bug — with a larger face in pixels,
-the eyes box scales proportionally.
+times: every region type in a single call to
+`CompositeImageDetector.detect()` — with visually correct, geometrically
+plausible boxes (each arm box contains its corresponding hand box; legs
+span from hip height to the bottom of the frame). On a half-body photo,
+LEGS is correctly absent rather than a made-up box (see the zero-size
+guard in `bbox_from_points`). The eyes box came out very thin (62×7px) in
+one photo because the source face is already small (46×68px); that's a
+consequence of the source resolution, not a code bug — with a larger face
+in pixels, the eyes box scales proportionally.
 
-**None of BODY/TORSO/LEFT_ARM/RIGHT_ARM/LEFT_LEG/RIGHT_LEG are editable
-yet**: `region_operation_rules.py` assigns each an empty `frozenset()`,
-same as FACE — they're detected and shown in the frontend, but have no
-operations in the catalog yet (a product decision, not a technical
-limitation; see "Next steps").
+**Body-part operations**: TORSO gets red shirt / black jacket / white
+T-shirt, each arm gets wristwatch / bracelet, LEGS gets blue jeans /
+shorts. FACE and the whole-body BODY region stay detection-only: no single
+operation on them makes sense yet without a much larger, riskier edit.
+Garment prompts use their own preserve clause, since the shared one says
+"keep the clothing exactly the same" — which would contradict the
+instruction itself.
 
 ### ComfyUI — real API (not invented)
 
@@ -278,6 +287,16 @@ the fix gives a clean gesture, no ghosting; the left hand, face, hair, and
 clothes stay intact. There's a slight residual softening where the hand
 crosses strands of hair — acceptable for the MVP, adjustable by raising
 `grow_px` or another approach (edge-aware masking) if needed later.
+
+**Per region type, not one global value** (`domain/services/mask_rules.py`):
+40px is right for a gesture but wrong for a garment. Recoloring a shirt
+doesn't change the silhouette, and 40px of grown mask around a torso
+reaches into the arms and background — anything Qwen changed there would
+leak into the composite. So gesture regions (hands, mouth, eyes) keep 40px
+and garment/accessory regions (torso, arms, legs) use 16px. It's keyed by
+region type rather than operation because a region's mask is computed once
+and cached with its grow_px, and every operation on a given region type
+falls in the same category anyway.
 
 ### Resolution: Qwen's output isn't the crop's size
 
@@ -397,17 +416,29 @@ real emoji → click an operation → confirmation card).
 - `backend/tests/integration/test_comfyui_edit_live.py` — opt-in
   (`pytest -m live_comfyui`), against real ComfyUI + Qwen Image Edit.
   Neither runs by default (`addopts` in `pyproject.toml` excludes them).
-- `backend/tests/evaluation/` — golden dataset. `evaluators/region_preservation.py`
-  is real (numpy diff outside the mask, with its own synthetic tests in
-  `test_region_preservation_evaluator.py`); `evaluators/edit_quality.py` and
-  `identity_preservation.py` are documented stubs that deliberately fail
-  with `NotImplementedError` (tested in `test_stub_evaluators.py`) instead
-  of returning a meaningless result. `test_golden_dataset.py` (opt-in,
-  `pytest -m live_comfyui`) runs each entry from `datasets/golden_*.json`
-  through the real pipeline; with empty datasets (on purpose — see
-  `datasets/README.md`, real photos aren't uploaded without consent) it
-  collects as a single "skipped: got empty parameter set" test, not as
-  absent — the mechanism is already proven, it just needs populating.
+- `backend/tests/evaluation/` — golden dataset. Two real evaluators:
+  - `evaluators/region_preservation.py`: numpy diff outside the mask, with
+    its own synthetic tests in `test_region_preservation_evaluator.py`.
+  - `evaluators/edit_quality.py`: zero-shot CLIP
+    (`openai/clip-vit-base-patch32`, on CPU so it never competes for VRAM).
+    The edited crop must be classified as the requested operation among
+    the ones `region_operation_rules.py` allows on that region, and score
+    at least 0.10 higher than the original crop did. That margin exists
+    because CLIP is noisy on some untouched crops: calibrating on the real
+    demo photos, it gave "an arm wearing a wristwatch" 0.64 on an arm with
+    no watch. Its decision logic is unit-tested with a fake scorer
+    (`test_edit_quality_evaluator.py`), and `test_edit_quality_live.py`
+    (`-m live_models`) checks the real model recognizes an unedited waving
+    hand as "wave".
+
+  `identity_preservation.py` is still a documented stub that deliberately
+  fails with `NotImplementedError` (tested in `test_stub_evaluators.py`).
+  `test_golden_dataset.py` (opt-in, `pytest -m live_comfyui`) runs every
+  entry in `datasets/golden_*.json` through the real pipeline and checks
+  both evaluators. The bundled entries point at Unsplash-licensed photos
+  via `source_url` and are downloaded on first run (into a gitignored
+  folder), so the dataset works on a fresh clone without committing any
+  photo.
 - `frontend/src/**/*.test.{ts,tsx}` — `HttpImageApi` with `fetch` mocked
   (includes `requestEdit`/`confirmEdit`/`discardEdit`), `EditorPage` with a
   `FakeImageApiPort` injected into the Context (covers the full flow:
@@ -433,6 +464,21 @@ real emoji → click an operation → confirmation card).
   8188`. It exists specifically so that **cloning this repo is enough**:
   without this container, someone without ComfyUI already installed would
   have to set up the whole Qwen Image Edit pipeline by hand.
+
+  **Sharing the GPU**: by default ComfyUI runs with
+  `--disable-smart-memory --reserve-vram 4` (`COMFYUI_EXTRA_ARGS`, both
+  real flags from ComfyUI's own `cli_args.py`): it offloads models to RAM
+  after each edit instead of holding VRAM while idle, and keeps 4GB free
+  for other software. It was developed on a machine running several other
+  GPU containers (TTS, LLMs, another ComfyUI), where an idle ComfyUI
+  holding ~14GB of VRAM would starve them. The cost is slower edits, since
+  the models reload each time; set `COMFYUI_EXTRA_ARGS=` (empty) when
+  nothing else uses the GPU.
+
+  **Resumable model download**: `download_models.sh` uses `curl -C -`, so
+  a container restart halfway through the ~31GB first-start download picks
+  up where it left off instead of starting the 20GB model over (verified:
+  Hugging Face answers the resumed request with `206 Partial Content`).
 
   **Real bug found on first startup**: with a freshly created `/data`
   volume (no custom nodes), `main.py` does
@@ -505,29 +551,22 @@ differs):
 
 ## Next steps (not implemented yet)
 
-1. **Body/torso/limb operations**: `RegionType.BODY`, `TORSO`, `LEFT_ARM`,
-   `RIGHT_ARM`, `LEFT_LEG`, and `RIGHT_LEG` are all already detected
-   (`PoseLandmarker`) and shown in the frontend, but
-   `region_operation_rules.py` assigns each zero operations — a pending
-   product decision on what edits would make sense to offer per region
-   (outfit color for torso/arms/legs? posture for the whole body?), not a
-   technical limitation.
-2. **Populate the golden dataset**: the schema, runner, and evaluator
-   (`region_preservation`) are already ready and tested; just needs real
-   photos added locally (`datasets/images/`, gitignored) and their entries
-   in `datasets/golden_*.json` — see `datasets/README.md`.
-3. **`edit_quality` / `identity_preservation`**: implement the stubs — a
-   VLM/CLIP judge against the operation's prompt for the first one, a
-   facial embedding model for the second (see their docstrings).
-4. **Tune the grown mask**: `DEFAULT_MASK_GROW_PX=40` is a single value for
-   every region type; a value per `RegionType` (or per `EditOperation`,
-   since "fist→peace" needs more margin than "closed smile→smile") would
-   give better edges without over-growing regions that don't need it.
-5. **Reference image per gesture**: the `ImageEditor.edit()` Port already
+1. **Whole-body and face operations**: BODY and FACE are detected but still
+   have no operations — a whole-body or whole-face edit is a much larger,
+   riskier change than a gesture or a garment (identity drift, pose
+   changes), so it waits until `identity_preservation` exists to catch it.
+2. **`identity_preservation`**: still a stub. The natural tool is a face
+   embedding model, but the common pretrained ones (e.g. insightface's)
+   carry non-commercial licenses, which is why it wasn't just dropped in.
+3. **Grow the golden dataset**: it currently has one case per kind of edit
+   (gesture, expression, garment, legs, accessory) on two photos. More
+   varied photos (lighting, skin tones, poses, occlusions) would make it a
+   stronger regression net.
+4. **Reference image per gesture**: the `ImageEditor.edit()` Port already
    accepts `reference_image_png_bytes` and the workflow already has
    `TextEncodeQwenImageEditPlus`'s `image2`/`image3` fields available —
    unused today because the text-only prompt already gives good results.
-6. **Thin eyes box on small faces**: `EYES`'s padding is proportional to the
+5. **Thin eyes box on small faces**: `EYES`'s padding is proportional to the
    raw landmark box, so on a photo with a face of only a few pixels (see
    the MediaPipe section above) the resulting box can end up too thin for a
    convincing open/close edit. Fixing this would need a minimum pixel

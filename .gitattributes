@@ -1,0 +1,4 @@
+# Shell scripts run inside Linux containers: with CRLF line endings (what
+# Git for Windows checks out by default, core.autocrlf=true) the shebang
+# becomes "#!/bin/sh\r" and the container can't start. Always LF.
+*.sh text eol=lf

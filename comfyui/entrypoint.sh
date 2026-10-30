@@ -18,5 +18,8 @@ mkdir -p /data/custom_nodes
 # persistent /data volume (docker-compose.yml's comfyui_data), so a
 # `docker compose down`/`up` doesn't lose downloaded models or generated
 # images. --listen 0.0.0.0 is what makes ComfyUI's own UI reachable from
-# the host, not just from other containers.
-exec python main.py --listen 0.0.0.0 --port 8188 --base-directory /data
+# the host, not just from other containers. COMFYUI_EXTRA_ARGS is
+# deliberately unquoted so it word-splits into separate flags (see
+# docker-compose.yml for the GPU-sharing defaults).
+# shellcheck disable=SC2086
+exec python main.py --listen 0.0.0.0 --port 8188 --base-directory /data $COMFYUI_EXTRA_ARGS

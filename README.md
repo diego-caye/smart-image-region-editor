@@ -38,9 +38,9 @@ Gariev, full-body portrait by Mitchell Luo.</sub>
 | 3b | Frontend: selectable region overlay + visual operation gallery (shadcn/ui) | ✅ |
 | 4 | Visual operation catalog | ✅ |
 | 5 | Localized editing via ComfyUI + composition, end-to-end (backend + frontend) | ✅ |
-| 6 | Golden dataset / evaluation | ✅ scaffolding + real `region_preservation` · `edit_quality`/`identity_preservation` are documented stubs |
+| 6 | Golden dataset / evaluation | ✅ `region_preservation` + CLIP-based `edit_quality` on bundled, auto-downloaded cases · `identity_preservation` is a documented stub |
 | — | Docker deployment (backend + frontend, GPU) | ✅ |
-| — | Extend to mouth/eyes/body/torso/limbs (detection) | ✅ MediaPipe — mouth/eyes are already editable; body, torso, arms, and legs are detected but have no operations yet |
+| — | Extend to mouth/eyes/torso/arms/legs | ✅ MediaPipe detection; expressions, garments (shirt, jacket, jeans, shorts) and accessories (watch, bracelet) are editable · face and whole-body are detection-only |
 | — | Containerized ComfyUI (self-contained repo, no native install required) | ✅ |
 
 Everything marked "✅" has passing tests (unit + integration) and was also
@@ -116,19 +116,25 @@ Endpoints available today:
 
 `backend/tests/evaluation/`:
 
-- `evaluators/region_preservation.py` — real: measures in pixels whether
+- `evaluators/region_preservation.py` — measures in pixels whether
   everything outside the mask stayed the same between the original and the
-  final image. Has its own unit tests (synthetic, no GPU) and the golden
-  dataset runner uses it against real edits.
-- `evaluators/edit_quality.py`, `evaluators/identity_preservation.py` —
-  documented stubs (`NotImplementedError` with the intended approach in the
-  docstring), don't block the MVP.
-- `datasets/golden_{hand,face,mouth}_edits.json` — empty on purpose: the
-  schema and runner (`test_golden_dataset.py`, opt-in via
-  `pytest -m live_comfyui`) are ready, but real photos to populate them
-  aren't uploaded to the repo without consent — see `datasets/README.md`
-  for the schema and how to add your own locally (`datasets/images/`,
-  already in `.gitignore`).
+  final image.
+- `evaluators/edit_quality.py` — checks the requested edit actually
+  happened: zero-shot CLIP (`openai/clip-vit-base-patch32`, on CPU) must
+  classify the edited region as the requested operation, and more
+  confidently than the original.
+- `evaluators/identity_preservation.py` — documented stub, not implemented
+  yet.
+- `datasets/golden_*_edits.json` — one case per kind of edit (gesture,
+  expression, shirt, jeans, wristwatch) on Unsplash-licensed photos, which
+  are downloaded on first run and never committed. Run them with:
+
+  ```powershell
+  ./.venv/Scripts/pip install -e ".[eval]"
+  ./.venv/Scripts/pytest -m live_comfyui tests/evaluation/test_golden_dataset.py
+  ```
+
+  See `datasets/README.md` to add your own photos.
 
 ## Frontend (native)
 
@@ -150,7 +156,7 @@ points the `@/presentation/...` aliases at the project's hexagonal
 structure, not shadcn's default paths).
 
 The full flow works end-to-end: upload an image → **Analyze image** (real
-YOLOv8 + MediaPipe detection, up to 11 region types: face, hands, mouth,
+YOLOv8 + MediaPipe detection, up to 10 region types: face, hands, mouth,
 eyes, body, torso, arms, legs) → overlay of selectable, colored boxes over
 the image, larger regions rendered first so smaller ones nested inside them
 (e.g. a hand inside an arm) stay clickable → click a region → visual
@@ -177,10 +183,15 @@ containerizing it, so cloning this repo and running one command is enough.
 - Frontend at `http://localhost:5180`, backend at `http://localhost:8420`,
   **ComfyUI's own UI at `http://localhost:8188`** (useful for inspecting the
   graph/queue directly).
-- First start: the `comfyui` container downloads ~15GB of models (Qwen Image
+- First start: the `comfyui` container downloads ~31GB of models (Qwen Image
   Edit + LoRA + text encoder + VAE) into a named volume (`comfyui_data`) —
-  takes several minutes depending on your bandwidth, but only the first
-  time; subsequent starts are instant.
+  takes a while depending on your bandwidth, but only the first time;
+  subsequent starts are instant.
+- ComfyUI assumes it shares the GPU with other software by default: it
+  offloads its models after each edit and keeps 4GB of VRAM free
+  (`COMFYUI_EXTRA_ARGS` in `docker-compose.yml`). That makes each edit
+  slower since the models reload every time; if nothing else uses your GPU,
+  set `COMFYUI_EXTRA_ARGS=` (empty) in `.env` to keep them loaded.
 - The backend runs with GPU access (`deploy.resources.reservations` in
   `docker-compose.yml`) for SAM2; ComfyUI also requests it for Qwen Image
   Edit. If your machine doesn't have Docker's `nvidia` runtime configured,

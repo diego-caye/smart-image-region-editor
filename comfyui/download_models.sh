@@ -3,7 +3,7 @@
 # needs, if they aren't already present in the persistent /data volume. Every
 # URL/filename/size below was verified against the real Hugging Face API
 # before being written here — not guessed — and matches byte-for-byte the
-# files already on this machine's native ComfyUI install (see
+# files a native ComfyUI install of the same workflow uses (see
 # docs/architecture.md), which is exactly why the backend's default
 # QWEN_UNET_NAME/QWEN_VAE_NAME/etc. settings work unchanged against this
 # containerized ComfyUI too.
@@ -20,7 +20,10 @@ download_if_missing() {
   fi
   echo "[download_models] downloading -> $dest"
   mkdir -p "$(dirname "$dest")"
-  curl -L --fail --retry 3 --retry-delay 5 -o "$dest.part" "$url"
+  # -C - resumes from an existing .part instead of starting over, so a
+  # container restart halfway through the ~20GB first-start download
+  # doesn't throw the progress away.
+  curl -L --fail --retry 3 --retry-delay 5 -C - -o "$dest.part" "$url"
   mv "$dest.part" "$dest"
 }
 
