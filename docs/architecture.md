@@ -87,8 +87,8 @@ Discarding an edit doesn't touch the session at all.
 
 ### Detection/segmentation: our own stack in the backend, not via ComfyUI
 
-Explicit user decision. Trade-off: backend and ComfyUI share a single GPU
-(RTX 5080, 16GB). Mitigated in `infrastructure/config/settings.py`:
+A deliberate design decision. Trade-off: backend and ComfyUI share a single
+GPU (developed on an RTX 5080, 16GB). Mitigated in `infrastructure/config/settings.py`:
 
 - `detection_device` (YOLOv8n face/hand) defaults to `cpu` — tiny model,
   fast, no VRAM footprint.
@@ -213,8 +213,8 @@ limitation; see "Next steps").
 
 ### ComfyUI — real API (not invented)
 
-Confirmed by reading the local install's real `server.py`
-(`C:\Users\diego\AppData\Local\Programs\ComfyUI\resources\ComfyUI\server.py`):
+Confirmed by reading a real install's `server.py` (ComfyUI's own source,
+not its docs):
 
 ```
 POST /prompt            queue a workflow (API-format, not the UI format
@@ -424,8 +424,8 @@ real emoji → click an operation → confirmation card).
   `comfyanonymous/ComfyUI` (tag `v0.37.0`) — **no custom_nodes**. Verified
   node by node (`grep` against the real source code) that all 13 node
   classes `qwen_edit.json` uses live in core `nodes.py`/`comfy_extras/`,
-  none in a custom node package; the only thing needed from the user's
-  native ComfyUI was the model files, not its node install. `entrypoint.sh`
+  none in a custom node package; the only thing needed from a native
+  ComfyUI setup was the model files, not its custom node install. `entrypoint.sh`
   runs `download_models.sh` (downloads the 4 Qwen Image Edit files —
   verified via the real Hugging Face API, byte-for-byte identical to the
   ones already installed natively — into a named volume `comfyui_data`,
@@ -463,8 +463,9 @@ real emoji → click an operation → confirmation card).
   `ultralytics`/`sam2`'s own unpinned `torch` dependency doesn't silently
   replace this build with one lacking support for this GPU. GPU access via
   `deploy.resources.reservations.devices` (Compose Spec, works with a
-  normal `docker compose up`, no swarm needed) — confirmed working on this
-  machine (`docker run --gpus all ... nvidia-smi` sees the RTX 5080).
+  normal `docker compose up`, no swarm needed) — confirmed working on the
+  development machine (`docker run --gpus all ... nvidia-smi` sees the RTX
+  5080).
 
   **Real bug when adding mediapipe**: its compiled Tasks API bindings
   `dlopen()` `libEGL.so.1` and `libGLESv2.so.2` when importing
