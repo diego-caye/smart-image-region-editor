@@ -68,9 +68,14 @@ _PROMPTS: dict[EditOperation, str] = {
         "fully down."
         + _PRESERVE_CLAUSE
     ),
+    # Names what to leave alone on purpose: on a subject wearing an open
+    # jacket over a T-shirt, an earlier "the shirt, including its sleeves"
+    # wording made Qwen paint the *jacket's* sleeves red (the shirt's own
+    # sleeves being hidden), leaving a gray vest with red sleeves.
     EditOperation.RED_SHIRT: (
-        "Change the shirt on the upper body, including its sleeves, to a solid "
-        "bright red color, keeping the same cut, fit and fabric folds."
+        "Change the color of the shirt or T-shirt worn on the upper body to a "
+        "solid bright red, keeping its cut, fit and fabric folds. Leave anything "
+        "worn over it, such as a jacket or coat, unchanged."
         + _GARMENT_PRESERVE_CLAUSE
     ),
     EditOperation.BLACK_JACKET: (

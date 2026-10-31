@@ -30,7 +30,18 @@ class Sam2MaskPredictor:
         cache_dir.mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("HF_HOME", str(cache_dir))
 
-    def segment_box(self, image_rgb: np.ndarray, box_xyxy: tuple[int, int, int, int]) -> np.ndarray:
+    def segment_box(
+        self,
+        image_rgb: np.ndarray,
+        box_xyxy: tuple[int, int, int, int],
+        *,
+        also_point_xy: tuple[float, float] | None = None,
+    ) -> np.ndarray:
+        """The box-prompted mask, optionally unioned with the mask for a
+        single positive point (pixel coordinates). SAM2 returns one object
+        per prompt, so this is how a caller gets two objects — e.g. an open
+        jacket from the box and the shirt under it from a point on the
+        chest. Both predictions reuse one set_image(), the expensive part."""
         from sam2.sam2_image_predictor import SAM2ImagePredictor
 
         predictor = SAM2ImagePredictor.from_pretrained(self._model_id, device=self._device)
@@ -40,7 +51,17 @@ class Sam2MaskPredictor:
                 box=np.array(box_xyxy, dtype=np.float32),
                 multimask_output=False,
             )
-            return masks[0] > 0.5
+            mask = masks[0] > 0.5
+            if also_point_xy is not None:
+                # A single point is ambiguous (part vs. whole object), which
+                # is what multimask_output is for; keep SAM2's own best guess.
+                point_masks, point_scores, _ = predictor.predict(
+                    point_coords=np.array([also_point_xy], dtype=np.float32),
+                    point_labels=np.array([1]),
+                    multimask_output=True,
+                )
+                mask |= point_masks[int(np.argmax(point_scores))] > 0.5
+            return mask
         finally:
             del predictor
             release_cuda_memory()

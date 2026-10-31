@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from app.adapters.imaging.pillow_image_compositor import PillowImageCompositor
+from app.adapters.imaging.pillow_image_compositor import PillowImageCompositor, blend_mask
 from app.domain.value_objects.bounding_box import BoundingBox
 
 
@@ -54,6 +54,36 @@ def test_pixels_outside_the_mask_are_byte_identical_to_the_original():
     outside = np.ones((100, 100), dtype=bool)
     outside[40:60, 40:60] = False
     assert np.array_equal(result_arr[outside], original_arr[outside])
+
+
+def test_with_grow_and_feather_only_pixels_where_blend_mask_is_zero_are_guaranteed():
+    # The real contract once the mask is grown and feathered: the band
+    # around the raw mask changes by design, everything at blend_mask == 0
+    # stays byte-identical. The golden dataset measures against this.
+    original = _solid_png((200, 200), (255, 0, 0))
+    edited_region = _solid_png((120, 120), (0, 0, 255))
+    mask = _mask_png((200, 200), (90, 90, 110, 110))
+    region_box = BoundingBox(x_min=40, y_min=40, x_max=160, y_max=160)
+
+    result = PillowImageCompositor().composite(
+        original_png_bytes=original,
+        edited_region_png_bytes=edited_region,
+        region_box=region_box,
+        mask_png_bytes=mask,
+        grow_px=16,
+        feather_px=6,
+    )
+    effective = np.array(blend_mask(mask, region_box, grow_px=16, feather_px=6))
+
+    original_arr = _load_rgb(original)
+    result_arr = _load_rgb(result)
+    untouched = effective == 0
+    assert np.array_equal(result_arr[untouched], original_arr[untouched])
+
+    raw_outside = np.array(Image.open(BytesIO(mask)).convert("L")) == 0
+    changed = np.any(result_arr != original_arr, axis=-1)
+    # some pixels outside the raw mask did change — the grown band
+    assert (changed & raw_outside).any()
 
 
 def test_pixels_inside_the_mask_come_from_the_edited_region():

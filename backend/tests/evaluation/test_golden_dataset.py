@@ -16,6 +16,7 @@ Set GOLDEN_OUTPUT_DIR to also write each entry's final image there
 
 from __future__ import annotations
 
+import io
 import os
 from pathlib import Path
 from uuid import uuid4
@@ -27,6 +28,7 @@ from app.adapters.http.dependencies import (
     get_image_editor,
     get_image_segmenter,
 )
+from app.adapters.imaging.pillow_image_compositor import blend_mask
 from app.domain.entities.region import DetectedRegion
 from app.domain.services.mask_rules import mask_grow_px_for
 from app.domain.value_objects.bounding_box import BoundingBox
@@ -62,19 +64,31 @@ def test_golden_entry(entry: dict):
         region_box=region.bounding_box,
         operation=operation,
     )
+    grow_px = entry.get("grow_px", mask_grow_px_for(region_type))
+    feather_px = entry.get("feather_px", 12)
     final_bytes = get_image_compositor().composite(
         original_png_bytes=image_bytes,
         edited_region_png_bytes=editor_result.edited_region_png_bytes,
         region_box=editor_result.region_box_used,
         mask_png_bytes=segmentation.mask_png_bytes,
-        grow_px=entry.get("grow_px", mask_grow_px_for(region_type)),
-        feather_px=entry.get("feather_px", 12),
+        grow_px=grow_px,
+        feather_px=feather_px,
     )
+
+    # Measured against the mask the compositor actually blended with, not
+    # the raw segmentation: the grown+feathered band changes by design.
+    effective_mask = io.BytesIO()
+    blend_mask(
+        segmentation.mask_png_bytes,
+        editor_result.region_box_used,
+        grow_px=grow_px,
+        feather_px=feather_px,
+    ).save(effective_mask, format="PNG")
 
     preservation = evaluate_region_preservation(
         image_bytes,
         final_bytes,
-        segmentation.mask_png_bytes,
+        effective_mask.getvalue(),
         pixel_tolerance=entry.get("pixel_tolerance", 8),
         max_changed_fraction=entry.get("max_changed_fraction", 0.01),
     )
