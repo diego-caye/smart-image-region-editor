@@ -140,6 +140,7 @@ def get_image_segmenter() -> ImageSegmenter:
         settings.sam2_model_id,
         device=resolve_device(settings.segmentation_device),
         cache_dir=settings.models_cache_dir,
+        idle_unload_seconds=settings.models_idle_unload_seconds,
     )
     return Sam2ImageSegmenter(predictor)
 
@@ -151,7 +152,9 @@ def get_image_editor() -> ImageEditor:
 
     settings = get_settings()
     client = ComfyUIClient(
-        settings.comfyui_base_url, timeout_seconds=settings.comfyui_timeout_seconds
+        settings.comfyui_base_url,
+        timeout_seconds=settings.comfyui_timeout_seconds,
+        idle_unload_seconds=settings.models_idle_unload_seconds,
     )
     return ComfyUIImageEditor(
         client,

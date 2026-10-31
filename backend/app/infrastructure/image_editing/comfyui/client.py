@@ -18,6 +18,8 @@ from typing import Protocol
 
 import httpx
 
+from app.infrastructure.idle_release import IdleReleaser
+
 
 class ComfyUIError(Exception):
     pass
@@ -54,10 +56,29 @@ class MessageSource(Protocol):
 
 
 class ComfyUIClient:
-    def __init__(self, base_url: str, *, timeout_seconds: float) -> None:
+    def __init__(
+        self, base_url: str, *, timeout_seconds: float, idle_unload_seconds: float = 0
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._ws_url = "ws" + self._base_url.removeprefix("http")  # http->ws, https->wss
         self._timeout_seconds = timeout_seconds
+        # ComfyUI keeps models loaded between prompts; this asks it to let go
+        # once edits stop coming (see IdleReleaser). 0 = never ask.
+        self._idle = (
+            IdleReleaser(idle_unload_seconds, self.free_memory, name="ComfyUI models")
+            if idle_unload_seconds > 0
+            else None
+        )
+
+    def free_memory(self) -> None:
+        """POST /free: unload every model and free cached memory. Takes
+        effect right away even when ComfyUI is idle — its prompt worker is
+        woken by the flag (PromptQueue.set_flag notifies the queue)."""
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(
+                f"{self._base_url}/free", json={"unload_models": True, "free_memory": True}
+            )
+        response.raise_for_status()
 
     def upload_image(self, data: bytes, *, filename: str) -> str:
         """POST /upload/image. Returns the filename ComfyUI actually stored
@@ -95,10 +116,16 @@ class ComfyUIClient:
         from websockets.sync.client import connect
 
         client_id = uuid.uuid4().hex
-        with connect(f"{self._ws_url}/ws?clientId={client_id}", max_size=None, open_timeout=30) as ws:
-            prompt_id = self._queue_prompt(prompt, client_id)
-            image_ref = self._wait_for_output(ws, prompt, prompt_id, output_node_id, on_event)
-        return self._download_image(image_ref)
+        try:
+            with connect(
+                f"{self._ws_url}/ws?clientId={client_id}", max_size=None, open_timeout=30
+            ) as ws:
+                prompt_id = self._queue_prompt(prompt, client_id)
+                image_ref = self._wait_for_output(ws, prompt, prompt_id, output_node_id, on_event)
+            return self._download_image(image_ref)
+        finally:
+            if self._idle is not None:
+                self._idle.touch()
 
     def _queue_prompt(self, prompt: dict, client_id: str) -> str:
         with httpx.Client(timeout=30.0) as client:

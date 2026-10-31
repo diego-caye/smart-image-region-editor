@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     comfyui_base_url: str = "http://127.0.0.1:8188"
     comfyui_timeout_seconds: float = 180.0
 
+    # Qwen (in ComfyUI) and SAM2 stay loaded between edits and are released
+    # after this many seconds without one — fast back-to-back edits without
+    # holding GPU memory indefinitely. 0 = release right after every edit
+    # (slowest, but frees the GPU immediately). See infrastructure/idle_release.py.
+    models_idle_unload_seconds: float = 180.0
+
     # Qwen Image Edit model files + sampling params — verified against the
     # real local ComfyUI's /object_info and confirmed working end-to-end
     # (see docs/architecture.md). Configurable here, not hardcoded in the
@@ -57,7 +63,7 @@ class Settings(BaseSettings):
     # --- Detection/segmentation device placement (backend's own ML stack;
     # shares one GPU with ComfyUI — see docs/architecture.md). ---
     detection_device: str = "cpu"  # YOLOv8n face/hand: tiny, fast, no VRAM impact
-    segmentation_device: str = "cuda"  # SAM2: quality benefits from GPU, released after each call
+    segmentation_device: str = "cuda"  # SAM2: quality benefits from GPU, released when idle
 
     # Reuse ComfyUI's already-downloaded YOLO weights when present (avoids a
     # duplicate download) — but if configured_path doesn't exist (no

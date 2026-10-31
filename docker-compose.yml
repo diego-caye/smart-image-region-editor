@@ -11,12 +11,11 @@ services:
     ports:
       - "${COMFYUI_PORT:-8188}:8188"
     environment:
-      # Defaults assume the GPU is shared with other software:
-      # --disable-smart-memory offloads models to RAM after each edit instead
-      # of holding VRAM while idle, and --reserve-vram leaves that many GB for
-      # everything else. Edits get slower (models reload each time); set
-      # COMFYUI_EXTRA_ARGS to empty in .env if this is the only GPU workload.
-      COMFYUI_EXTRA_ARGS: ${COMFYUI_EXTRA_ARGS---disable-smart-memory --reserve-vram 4}
+      # --reserve-vram leaves that many GB free for other software sharing
+      # the GPU. Models stay loaded between edits (fast back-to-back edits);
+      # the backend asks ComfyUI to unload them after MODELS_IDLE_UNLOAD_SECONDS
+      # without an edit, so an idle ComfyUI doesn't hold the GPU.
+      COMFYUI_EXTRA_ARGS: ${COMFYUI_EXTRA_ARGS---reserve-vram 4}
     volumes:
       - comfyui_data:/data
     # Remove this whole `deploy` block to run ComfyUI CPU-only on a machine
@@ -42,6 +41,9 @@ services:
       # nodes/models already set up).
       COMFYUI_BASE_URL: ${COMFYUI_BASE_URL:-http://comfyui:8188}
       COMFYUI_TIMEOUT_SECONDS: "180.0"
+      # Qwen and SAM2 are released after this long without an edit (0 =
+      # right after every edit).
+      MODELS_IDLE_UNLOAD_SECONDS: ${MODELS_IDLE_UNLOAD_SECONDS:-180}
       STORAGE_ROOT: /app/data/images
       DATABASE_URL: sqlite:////app/data/app.db
       CORS_ALLOW_ORIGINS: '["http://localhost:${FRONTEND_PORT:-5180}","http://127.0.0.1:${FRONTEND_PORT:-5180}"]'
