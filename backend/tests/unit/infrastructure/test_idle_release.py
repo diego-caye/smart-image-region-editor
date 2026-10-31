@@ -33,3 +33,27 @@ def test_a_failing_release_does_not_raise():
         raise RuntimeError("server unreachable")
 
     IdleReleaser(0, boom, name="test").touch()  # logged, not raised
+
+
+def test_flush_releases_a_pending_release_right_away_and_only_once():
+    calls = []
+    releaser = IdleReleaser(60, lambda: calls.append(1), name="test")
+    releaser.touch()
+    releaser.flush()
+    releaser.flush()
+    assert calls == [1]
+
+
+def test_flush_does_nothing_once_the_release_already_ran():
+    released = threading.Event()
+    calls = []
+
+    def release():
+        calls.append(1)
+        released.set()
+
+    releaser = IdleReleaser(0.05, release, name="test")
+    releaser.touch()
+    assert released.wait(timeout=2)
+    releaser.flush()
+    assert calls == [1]

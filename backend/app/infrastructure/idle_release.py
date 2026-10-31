@@ -6,6 +6,7 @@ fast back-to-back edits, memory handed back once the user stops editing."""
 
 from __future__ import annotations
 
+import atexit
 import logging
 import threading
 from collections.abc import Callable
@@ -16,7 +17,10 @@ logger = logging.getLogger(__name__)
 class IdleReleaser:
     """Runs `release` once `idle_seconds` pass without a touch(). An
     idle_seconds of 0 or less releases right away on every touch — i.e.
-    load per use, never keep."""
+    load per use, never keep. A release still pending when the process
+    exits runs then: the timer thread is a daemon and would otherwise die
+    with it, leaving ComfyUI holding the model with nobody left to free it
+    (seen after a golden-dataset run)."""
 
     def __init__(self, idle_seconds: float, release: Callable[[], None], *, name: str) -> None:
         self._idle_seconds = idle_seconds
@@ -24,6 +28,7 @@ class IdleReleaser:
         self._name = name
         self._lock = threading.Lock()
         self._timer: threading.Timer | None = None
+        atexit.register(self.flush)
 
     def touch(self) -> None:
         with self._lock:
@@ -31,11 +36,24 @@ class IdleReleaser:
                 self._timer.cancel()
                 self._timer = None
             if self._idle_seconds > 0:
-                self._timer = threading.Timer(self._idle_seconds, self._fire)
+                self._timer = threading.Timer(self._idle_seconds, self._on_timer)
                 self._timer.daemon = True
                 self._timer.start()
         if self._idle_seconds <= 0:
             self._fire()
+
+    def flush(self) -> None:
+        """Release now if a release is pending; otherwise do nothing."""
+        with self._lock:
+            pending, self._timer = self._timer, None
+        if pending is not None:
+            pending.cancel()
+            self._fire()
+
+    def _on_timer(self) -> None:
+        with self._lock:
+            self._timer = None
+        self._fire()
 
     def _fire(self) -> None:
         try:
