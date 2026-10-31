@@ -1,34 +1,80 @@
 # Smart Image Region Editor
 
-Upload a photo, the system detects regions (face, hands, mouth, eyes, torso,
-arms, legs, body), you visually select a region and a predefined
-transformation ("✌️ Peace sign"), and only that region changes — the rest of
-the image is preserved. Hexagonal architecture (Ports & Adapters) in both
-backend and frontend. Includes a containerized ComfyUI, so cloning the repo
-and running `docker compose up` is enough even if you don't have ComfyUI
-installed. See [docs/architecture.md](docs/architecture.md) for the design
-decisions and their reasoning.
+Upload a photo, and the app detects its regions: face, hands, mouth, eyes,
+torso, arms, legs. Click one, pick a predefined edit like "✌️ Peace sign" or
+"👖 Blue jeans", and only that region changes; everything outside it stays
+pixel-identical. No prompts to type: every edit is a visual choice.
 
-## Screenshots
+Hexagonal architecture (Ports & Adapters) in both backend and frontend.
+ComfyUI ships in its own container, so cloning the repo and running
+`docker compose up` is enough even without ComfyUI installed. See
+[docs/architecture.md](docs/architecture.md) for the design decisions and
+their reasoning.
 
-**Pick a region, pick a transformation, preview before/after.** Right hand →
-"Wave": the motion-blurred hand becomes a crisp open wave, while everything
-outside the hand's mask — face, shirt, background — stays pixel-identical
-(the compositor enforces that, not the model).
+## The app
 
-![Right hand → Wave, before/after preview](docs/screenshots/edit-before-after.png)
+Detected regions are drawn over the photo; clicking one opens the edits
+available for it, and every edit is previewed before/after before you
+accept it. Here: Legs → "Blue jeans", on a photo where 9 regions were
+detected in one pass.
 
-**Garments too.** Legs → "Blue jeans" on a full-body photo: 9 region types
-detected in one pass — face, eyes, mouth, hand (YOLOv8 + MediaPipe
-FaceLandmarker) and body, torso, both arms, legs (MediaPipe
-PoseLandmarker) — and only the pants change; jacket, hands in pockets and
-sneakers stay as they were.
+<img src="docs/screenshots/edit-legs-jeans.png" alt="The app: region overlay, operation gallery and before/after preview for Legs → Blue jeans" width="560">
 
-<img src="docs/screenshots/edit-legs-jeans.png" alt="Legs → Blue jeans, with full-body region detection" width="560">
+## Examples
+
+Real outputs of the pipeline (SAM2 mask + Qwen Image Edit + compositing),
+straight from the golden dataset run, not retouched.
+
+**Hand gesture** — Right hand → Peace sign. The blurred mid-wave hand
+becomes a crisp V; face, shirt and background are untouched.
+
+<img src="docs/screenshots/examples/peace-sign.png" alt="Right hand → Peace sign, before/after" width="760">
+
+**Expression** — Mouth → Smile with teeth.
+
+<img src="docs/screenshots/examples/smile-with-teeth.png" alt="Mouth → Smile with teeth, before/after" width="760">
+
+**Accessory** — Right arm → Wristwatch, placed on the wrist of the raised
+arm.
+
+<img src="docs/screenshots/examples/wristwatch.png" alt="Right arm → Wristwatch, before/after" width="760">
+
+**Garments** — Torso → Red shirt changes only the T-shirt under the open
+jacket; Legs → Blue jeans changes only the pants, keeping the hands in the
+pockets and the sneakers.
+
+<img src="docs/screenshots/examples/red-shirt.png" alt="Torso → Red shirt, before/after" width="380"> <img src="docs/screenshots/examples/blue-jeans.png" alt="Legs → Blue jeans, before/after" width="380">
 
 <sub>Demo photos from Unsplash, used under the
 [Unsplash License](https://unsplash.com/license): waving man by Vitaly
 Gariev, full-body portrait by Mitchell Luo.</sub>
+
+## What you can edit
+
+| Region | Detected by | Edits |
+|---|---|---|
+| Left / right hand | YOLOv8 | 👋 Wave · ✌️ Peace sign · 👍 Thumbs up · ✊ Fist |
+| Mouth | MediaPipe FaceLandmarker | 🙂 Smile · 😁 Smile with teeth · 😐 Closed mouth |
+| Eyes | MediaPipe FaceLandmarker | 👀 Open eyes · 😌 Closed eyes |
+| Torso | MediaPipe PoseLandmarker | 👔 Red shirt · 🧥 Black jacket · 👕 White T-shirt |
+| Left / right arm | MediaPipe PoseLandmarker | ⌚ Wristwatch · 📿 Bracelet |
+| Legs | MediaPipe PoseLandmarker | 👖 Blue jeans · 🩳 Shorts |
+| Face, whole body | YOLOv8 / PoseLandmarker | detected and shown, not editable yet |
+
+## How it works
+
+1. **Detect** regions: YOLOv8 for face and hands, MediaPipe for mouth/eyes
+   (on a crop around the face) and for torso, arms and legs (pose).
+2. **Segment** the chosen region with SAM2, prompted with its box. For the
+   torso it also segments the center of the chest and merges both masks, so
+   an open jacket *and* the shirt under it are covered.
+3. **Edit** a crop around the region with Qwen Image Edit (via ComfyUI),
+   using an instruction written for that operation — the user never types
+   it.
+4. **Composite** the edit back through the mask, grown a little so a new
+   shape isn't clipped (40px for gestures, 16px for garments). Outside that
+   mask, every pixel is copied from the original: the model never gets the
+   chance to change the rest of the photo.
 
 ## Current status
 
@@ -40,14 +86,14 @@ Gariev, full-body portrait by Mitchell Luo.</sub>
 | 3b | Frontend: selectable region overlay + visual operation gallery (shadcn/ui) | ✅ |
 | 4 | Visual operation catalog | ✅ |
 | 5 | Localized editing via ComfyUI + composition, end-to-end (backend + frontend) | ✅ |
-| 6 | Golden dataset / evaluation | ✅ `region_preservation` + CLIP-based `edit_quality` on bundled, auto-downloaded cases · `identity_preservation` is a documented stub |
+| 6 | Golden dataset / evaluation | ✅ `region_preservation` + CLIP-based `edit_quality`, 5/5 bundled cases pass with real Qwen edits · `identity_preservation` is a documented stub |
 | — | Docker deployment (backend + frontend, GPU) | ✅ |
-| — | Extend to mouth/eyes/torso/arms/legs | ✅ MediaPipe detection; expressions, garments (shirt, jacket, jeans, shorts) and accessories (watch, bracelet) are editable · face and whole-body are detection-only |
-| — | Containerized ComfyUI (self-contained repo, no native install required) | ✅ |
+| — | Extend to mouth/eyes/torso/arms/legs | ✅ expressions, garments (shirt, jacket, jeans, shorts) and accessories (watch, bracelet) are editable · face and whole-body are detection-only |
+| — | Containerized ComfyUI (self-contained repo, no native install required) | ✅ shares the GPU politely by default; model download resumes if interrupted |
 
 Everything marked "✅" has passing tests (unit + integration) and was also
-verified against real running processes (`uvicorn`/`docker compose` +
-`curl`, real detection on a real photo, and `vite build`).
+verified against real running processes (`docker compose`, real detection
+and real Qwen edits on real photos, and the UI driven in a browser).
 
 **Ports**: `8420` (backend), `5180` (frontend), and `8188` (ComfyUI) by
 default, rather than the usual `8000`/`5173` — all configurable in the root
@@ -104,10 +150,13 @@ Endpoints available today:
   MediaPipe mouth/eyes/body/torso/limbs) and persists the found regions.
 - `GET /images/{id}/regions` — re-reads the already-detected regions.
 - `GET /regions/{region_type}/operations` — catalog of operations valid for a
-  region type (e.g. `right_hand` → wave/peace/thumbs-up/fist).
+  region type (e.g. `right_hand` → wave/peace/thumbs-up/fist, `legs` →
+  blue jeans/shorts).
 - `POST /images/{id}/edits` — `{region_id, operation}` → real localized
   editing (SAM2 + Qwen Image Edit via ComfyUI + composition), returns a
-  preview without touching the "official" image yet. ~25-30s per edit.
+  preview without touching the "official" image yet. About a minute per edit
+  with the default GPU-sharing settings (models reload each time), ~25-30s
+  with them kept loaded.
 - `POST /edits/{id}/confirm` — the preview becomes the session's current
   image; the next edit is applied on top of this result, not the original.
 - `POST /edits/{id}/discard` — discards the preview, the session doesn't
@@ -136,7 +185,28 @@ Endpoints available today:
   ./.venv/Scripts/pytest -m live_comfyui tests/evaluation/test_golden_dataset.py
   ```
 
-  See `datasets/README.md` to add your own photos.
+  Set `GOLDEN_OUTPUT_DIR` to also save every final image — the scores don't
+  catch everything (see below). See `datasets/README.md` to add your own
+  photos.
+
+Latest results, all 5 passing. The score is the probability CLIP gives the
+requested operation, among the ones allowed on that region, before → after:
+
+| Case | edit_quality (CLIP) |
+|---|---|
+| Right hand → Peace sign | 0.19 → 0.93 |
+| Mouth → Smile with teeth | 0.30 → 0.74 |
+| Right arm → Wristwatch | 0.64 → 0.90 |
+| Torso → Red shirt | 0.03 → 0.98 |
+| Legs → Blue jeans | 0.38 → 0.98 |
+
+The first real run is what found three bugs: the preservation check was
+measuring against the raw mask instead of the one the compositor actually
+blends with; on a person in an open jacket, SAM2 masked only the jacket,
+leaving a black stripe down the red shirt; and the first red-shirt prompt
+painted the jacket's sleeves. CLIP still scored the striped shirt 0.85 —
+only looking at the images caught it, which is why `GOLDEN_OUTPUT_DIR`
+exists.
 
 ## Frontend (native)
 
@@ -163,8 +233,8 @@ eyes, body, torso, arms, legs) → overlay of selectable, colored boxes over
 the image, larger regions rendered first so smaller ones nested inside them
 (e.g. a hand inside an arm) stay clickable → click a region → visual
 operation gallery (emoji + label, never plain text) → select one →
-**Generate preview** (real
-SAM2 + Qwen Image Edit via ComfyUI, ~25-30s) → Before/After comparison →
+**Generate preview** (real SAM2 + Qwen Image Edit via ComfyUI) →
+Before/After comparison →
 **Accept** (the session's image advances; a second edit is applied on top of
 this result, not the original — right hand→peace and left hand→thumbs-up
 coexist in the same photo) or **Discard** (no changes).
@@ -188,7 +258,8 @@ containerizing it, so cloning this repo and running one command is enough.
 - First start: the `comfyui` container downloads ~31GB of models (Qwen Image
   Edit + LoRA + text encoder + VAE) into a named volume (`comfyui_data`) —
   takes a while depending on your bandwidth, but only the first time;
-  subsequent starts are instant.
+  subsequent starts are instant. If the container restarts mid-download, it
+  resumes where it left off.
 - ComfyUI assumes it shares the GPU with other software by default: it
   offloads its models after each edit and keeps 4GB of VRAM free
   (`COMFYUI_EXTRA_ARGS` in `docker-compose.yml`). That makes each edit
