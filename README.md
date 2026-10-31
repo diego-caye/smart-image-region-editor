@@ -18,11 +18,13 @@ outside the hand's mask — face, shirt, background — stays pixel-identical
 
 ![Right hand → Wave, before/after preview](docs/screenshots/edit-before-after.png)
 
-**Region detection on a full-body photo** — 10 region types in one pass:
-face, eyes, mouth, hand (YOLOv8 + MediaPipe FaceLandmarker), and body,
-torso, both arms, both legs (MediaPipe PoseLandmarker).
+**Garments too.** Legs → "Blue jeans" on a full-body photo: 9 region types
+detected in one pass — face, eyes, mouth, hand (YOLOv8 + MediaPipe
+FaceLandmarker) and body, torso, both arms, legs (MediaPipe
+PoseLandmarker) — and only the pants change; jacket, hands in pockets and
+sneakers stay as they were.
 
-<img src="docs/screenshots/detection-full-body.png" alt="Full-body region detection" width="480">
+<img src="docs/screenshots/edit-legs-jeans.png" alt="Legs → Blue jeans, with full-body region detection" width="560">
 
 <sub>Demo photos from Unsplash, used under the
 [Unsplash License](https://unsplash.com/license): waving man by Vitaly
