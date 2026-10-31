@@ -1,4 +1,5 @@
 import { REGION_LABELS } from "../../adapters/ui/regionPresentation";
+import { EditProgressBar } from "../components/EditProgressBar";
 import { ImageUploader } from "../components/ImageUploader";
 import { OperationGallery } from "../components/OperationGallery";
 import { PreviewComparison } from "../components/PreviewComparison";
@@ -24,6 +25,7 @@ export function EditorPage() {
     operations,
     selectedOperation,
     editGenerationStatus,
+    editProgress,
     editError,
     editBeforeUrl,
     previewUrl,
@@ -155,12 +157,7 @@ export function EditorPage() {
                 Generate preview
               </Button>
             )}
-            {editGenerationStatus === "generating" && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Skeleton className="h-4 w-4 rounded-full" />
-                Generating with Qwen (via ComfyUI)… this can take about 20-30 seconds.
-              </div>
-            )}
+            {editGenerationStatus === "generating" && <EditProgressBar progress={editProgress} />}
             {editGenerationStatus === "error" && (
               <div className="flex flex-col gap-2">
                 <p role="alert" className="text-sm text-destructive">

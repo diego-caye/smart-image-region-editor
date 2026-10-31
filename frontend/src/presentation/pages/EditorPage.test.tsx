@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { EditSessionProvider } from "../../infrastructure/state/EditSessionContext";
@@ -200,6 +200,27 @@ describe("EditorPage", () => {
     expect(api.confirmedEditIds).toEqual(["edit-1"]);
     // selection resets so the user can pick another region for a second edit
     expect(screen.queryByText("2. Choose a transformation")).not.toBeInTheDocument();
+  });
+
+  it("shows what the edit is doing while it runs, then the preview", async () => {
+    const api = new FakeImageApiPort();
+    api.holdEdits = true;
+    const user = await setUpToOperationSelected(api);
+
+    await user.click(screen.getByRole("button", { name: "Generate preview" }));
+    expect(await screen.findByText("Starting…")).toBeInTheDocument();
+
+    act(() => api.reportProgress({ stage: "loading_model", fraction: 0.3, step: null, steps: null }));
+    expect(screen.getByText("Loading the editing model")).toBeInTheDocument();
+
+    act(() => api.reportProgress({ stage: "generating", fraction: 0.6, step: 2, steps: 4 }));
+    const bar = screen.getByRole("progressbar");
+    expect(bar).toHaveAccessibleName("Generating — step 2 of 4");
+    expect(bar).toHaveAttribute("aria-valuenow", "60");
+
+    act(() => api.releaseEdit());
+    await waitFor(() => expect(screen.getByAltText("After")).toBeInTheDocument());
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
   it("shows the backend's failure message and lets the user retry", async () => {

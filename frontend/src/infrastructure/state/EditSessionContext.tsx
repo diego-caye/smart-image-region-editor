@@ -4,6 +4,7 @@ import type { ImageApiPort, OperationCatalogEntry } from "../../application/port
 import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
 import type { EditOperation } from "../../domain/types/EditOperation";
+import type { EditProgress } from "../../domain/types/EditProgress";
 
 export type UploadStatus = "idle" | "uploading" | "ready" | "error";
 export type AnalysisStatus = "idle" | "analyzing" | "ready" | "error";
@@ -34,6 +35,8 @@ export interface EditSessionState {
 
   editId: string | null;
   editGenerationStatus: EditGenerationStatus;
+  // Null until the backend reports the first stage of a running edit.
+  editProgress: EditProgress | null;
   editError: string | null;
   editBeforeUrl: string | null;
   previewUrl: string | null;
@@ -53,6 +56,7 @@ export type EditSessionAction =
   | { type: "OPERATIONS_ERROR"; message: string }
   | { type: "SELECT_OPERATION"; operation: EditOperation }
   | { type: "EDIT_START" }
+  | { type: "EDIT_PROGRESS"; progress: EditProgress }
   | {
       type: "EDIT_SUCCESS";
       editId: string;
@@ -83,6 +87,7 @@ const initialState: EditSessionState = {
   selectedOperation: null,
   editId: null,
   editGenerationStatus: "idle",
+  editProgress: null,
   editError: null,
   editBeforeUrl: null,
   previewUrl: null,
@@ -92,6 +97,7 @@ const initialState: EditSessionState = {
 const clearedEditState = {
   editId: null,
   editGenerationStatus: "idle" as const,
+  editProgress: null,
   editError: null,
   editBeforeUrl: null,
   previewUrl: null,
@@ -147,21 +153,34 @@ function reducer(state: EditSessionState, action: EditSessionAction): EditSessio
       return {
         ...state,
         editGenerationStatus: "generating",
+        editProgress: null,
         editError: null,
         editBeforeUrl: state.currentImageUrl,
         previewUrl: null,
         editId: null,
       };
+    case "EDIT_PROGRESS":
+      // A late report must not bring back a bar for an edit that already
+      // finished or was replaced.
+      return state.editGenerationStatus === "generating"
+        ? { ...state, editProgress: action.progress }
+        : state;
     case "EDIT_SUCCESS":
       return {
         ...state,
         editId: action.editId,
         editGenerationStatus: action.status === "preview_ready" ? "ready" : "error",
+        editProgress: null,
         editError: action.status === "failed" ? action.errorMessage : null,
         previewUrl: action.previewUrl,
       };
     case "EDIT_REQUEST_ERROR":
-      return { ...state, editGenerationStatus: "error", editError: action.message };
+      return {
+        ...state,
+        editGenerationStatus: "error",
+        editProgress: null,
+        editError: action.message,
+      };
 
     case "CONFIRM_START":
       return { ...state, editConfirmStatus: "confirming" };

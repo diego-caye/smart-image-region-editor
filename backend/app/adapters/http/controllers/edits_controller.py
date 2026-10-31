@@ -7,17 +7,22 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.adapters.http.dependencies import (
     get_confirm_edit_use_case,
     get_discard_edit_use_case,
+    get_edit_progress_tracker,
     get_edit_region_use_case,
 )
 from app.adapters.http.schemas.edits import (
     ConfirmEditResponse,
     DiscardEditResponse,
+    EditProgressResponse,
     EditRegionRequestBody,
     EditRegionResponse,
 )
 from app.application.dto.edit_region import EditRegionRequest
-from app.application.use_cases.confirm_edit import ConfirmEditUseCase, EditNotFound as ConfirmEditNotFound
-from app.application.use_cases.discard_edit import DiscardEditUseCase, EditNotFound as DiscardEditNotFound
+from app.application.ports.edit_progress_tracker import EditProgressTracker
+from app.application.use_cases.confirm_edit import ConfirmEditUseCase
+from app.application.use_cases.confirm_edit import EditNotFound as ConfirmEditNotFound
+from app.application.use_cases.discard_edit import DiscardEditUseCase
+from app.application.use_cases.discard_edit import EditNotFound as DiscardEditNotFound
 from app.application.use_cases.edit_region import (
     EditRegionUseCase,
     EditSessionNotFound,
@@ -42,7 +47,12 @@ def create_edit(
 ) -> EditRegionResponse:
     try:
         result = use_case.execute(
-            EditRegionRequest(image_id=image_id, region_id=body.region_id, operation=body.operation)
+            EditRegionRequest(
+                image_id=image_id,
+                region_id=body.region_id,
+                operation=body.operation,
+                progress_id=body.progress_id,
+            )
         )
     except (ImageNotFound, RegionNotFound, EditSessionNotFound) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -54,6 +64,20 @@ def create_edit(
         status=result.status,
         preview_url=result.preview_url,
         error_message=result.error_message,
+    )
+
+
+@edits_router.get("/progress/{progress_id}", response_model=EditProgressResponse)
+def get_edit_progress(
+    progress_id: str, tracker: EditProgressTracker = Depends(get_edit_progress_tracker)
+) -> EditProgressResponse:
+    progress = tracker.get(progress_id)
+    if progress is None:
+        # Also the normal answer for the first poll or two, before the edit
+        # request has reported anything — clients should keep polling.
+        raise HTTPException(status_code=404, detail="No progress reported for this id yet")
+    return EditProgressResponse(
+        stage=progress.stage, fraction=progress.fraction, step=progress.step, steps=progress.steps
     )
 
 

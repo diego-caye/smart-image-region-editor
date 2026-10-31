@@ -77,6 +77,7 @@ export function useEditSession() {
         state.image.imageId,
         state.selectedRegionId,
         state.selectedOperation,
+        (progress) => dispatch({ type: "EDIT_PROGRESS", progress }),
       );
       dispatch({
         type: "EDIT_SUCCESS",

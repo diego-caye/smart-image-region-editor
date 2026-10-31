@@ -7,6 +7,7 @@ import type {
 import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
 import type { EditOperation } from "../../domain/types/EditOperation";
+import type { EditProgress } from "../../domain/types/EditProgress";
 import type { RegionType } from "../../domain/types/RegionType";
 import { httpClient, resolveAssetUrl } from "../../infrastructure/api/httpClient";
 
@@ -49,6 +50,9 @@ interface EditRegionResponseBody {
   preview_url: string | null;
   error_message: string | null;
 }
+
+/** Same shape as EditProgress, field names included. */
+type EditProgressResponseBody = EditProgress;
 
 interface ConfirmEditResponseBody {
   edit_id: string;
@@ -93,17 +97,28 @@ export class HttpImageApi implements ImageApiPort {
     imageId: string,
     regionId: string,
     operation: EditOperation,
+    onProgress?: (progress: EditProgress) => void,
   ): Promise<EditGenerationResult> {
-    const body = await httpClient.postJson<EditRegionResponseBody>(`/images/${imageId}/edits`, {
+    // The POST only answers once the edit is done, so progress is read
+    // from a separate endpoint, keyed by an id we choose up front.
+    const progressId = newProgressId();
+    const request = httpClient.postJson<EditRegionResponseBody>(`/images/${imageId}/edits`, {
       region_id: regionId,
       operation,
+      progress_id: progressId,
     });
-    return {
-      editId: body.edit_id,
-      status: body.status,
-      previewUrl: body.preview_url ? resolveAssetUrl(body.preview_url) : null,
-      errorMessage: body.error_message,
-    };
+    const stopPolling = onProgress ? pollProgress(progressId, onProgress) : () => {};
+    try {
+      const body = await request;
+      return {
+        editId: body.edit_id,
+        status: body.status,
+        previewUrl: body.preview_url ? resolveAssetUrl(body.preview_url) : null,
+        errorMessage: body.error_message,
+      };
+    } finally {
+      stopPolling();
+    }
   }
 
   async confirmEdit(editId: string): Promise<ConfirmEditResult> {
@@ -114,6 +129,40 @@ export class HttpImageApi implements ImageApiPort {
   async discardEdit(editId: string): Promise<void> {
     await httpClient.post(`/edits/${editId}/discard`);
   }
+}
+
+export const PROGRESS_POLL_INTERVAL_MS = 1000;
+
+/** Polls until the returned stop function is called. Best-effort: a 404 is
+ * normal before the edit reports anything, and any other failure just
+ * means one missed update — never a reason to fail the edit itself. */
+function pollProgress(progressId: string, onProgress: (progress: EditProgress) => void) {
+  let stopped = false;
+  void (async () => {
+    while (!stopped) {
+      await new Promise((resolve) => setTimeout(resolve, PROGRESS_POLL_INTERVAL_MS));
+      if (stopped) break;
+      try {
+        const body = await httpClient.get<EditProgressResponseBody>(`/edits/progress/${progressId}`);
+        // The edit may have finished while this request was in flight.
+        if (!stopped) onProgress(body);
+      } catch {
+        // see docstring
+      }
+    }
+  })();
+  return () => {
+    stopped = true;
+  };
+}
+
+/** crypto.randomUUID only exists in secure contexts — opening the app over
+ * a LAN IP (plain http) would lack it. */
+function newProgressId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 function regionFromResponseBody(body: RegionResponseBody): Region {

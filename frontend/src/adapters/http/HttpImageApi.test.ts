@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { HttpImageApi } from "./HttpImageApi";
+import type { EditProgress } from "../../domain/types/EditProgress";
+import { HttpImageApi, PROGRESS_POLL_INTERVAL_MS } from "./HttpImageApi";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -14,6 +15,7 @@ describe("HttpImageApi", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -106,7 +108,43 @@ describe("HttpImageApi", () => {
     expect(JSON.parse(init?.body as string)).toEqual({
       region_id: "region-1",
       operation: "peace_sign",
+      progress_id: expect.stringMatching(/^[A-Za-z0-9_-]{1,64}$/),
     });
+  });
+
+  it("requestEdit polls the edit's progress while it runs and stops once it ends", async () => {
+    vi.useFakeTimers();
+    let finishEdit!: (response: Response) => void;
+    vi.mocked(fetch).mockImplementation((input) => {
+      if (String(input).includes("/edits/progress/")) {
+        return Promise.resolve(
+          jsonResponse({ stage: "generating", fraction: 0.575, step: 2, steps: 4 }),
+        );
+      }
+      return new Promise<Response>((resolve) => {
+        finishEdit = resolve;
+      });
+    });
+
+    const reports: EditProgress[] = [];
+    const pending = new HttpImageApi().requestEdit("img-1", "region-1", "wave", (p) => reports.push(p));
+    await vi.advanceTimersByTimeAsync(PROGRESS_POLL_INTERVAL_MS * 2 + 10);
+
+    expect(reports).toEqual([
+      { stage: "generating", fraction: 0.575, step: 2, steps: 4 },
+      { stage: "generating", fraction: 0.575, step: 2, steps: 4 },
+    ]);
+    const calls = vi.mocked(fetch).mock.calls;
+    const { progress_id } = JSON.parse(calls[0][1]?.body as string);
+    expect(calls[1][0]).toBe(`http://127.0.0.1:8420/edits/progress/${progress_id}`);
+
+    finishEdit(
+      jsonResponse({ edit_id: "e1", status: "preview_ready", preview_url: "/p.png", error_message: null }),
+    );
+    await pending;
+    const callsWhenDone = calls.length;
+    await vi.advanceTimersByTimeAsync(PROGRESS_POLL_INTERVAL_MS * 3);
+    expect(calls.length).toBe(callsWhenDone);
   });
 
   it("requestEdit maps a failed response without a null preview_url crashing resolveAssetUrl", async () => {

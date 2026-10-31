@@ -1,5 +1,6 @@
 import pytest
 
+from app.application.dto.edit_progress import EditStage
 from app.application.dto.edit_region import EditRegionRequest
 from app.application.dto.upload_image import UploadImageRequest
 from app.application.use_cases.confirm_edit import ConfirmEditUseCase
@@ -18,6 +19,7 @@ from tests.unit.application.fakes import (
     FakeImageRepository,
     FakeImageSegmenter,
     FakeImageStorage,
+    RecordingProgressTracker,
 )
 
 
@@ -215,3 +217,60 @@ def test_mask_grow_depends_on_the_region_type(region_type, operation, expected_g
     )
 
     assert grow_px_seen == [expected_grow_px]
+
+
+def test_progress_is_reported_through_every_stage_when_a_progress_id_is_given():
+    storage = FakeImageStorage()
+    repo = FakeImageRepository()
+    uploaded, region = _setup_image_with_region(storage, repo)
+    tracker = RecordingProgressTracker()
+
+    EditRegionUseCase(
+        repo,
+        storage,
+        FakeImageSegmenter(),
+        FakeImageEditor(),
+        FakeImageCompositor(),
+        progress_tracker=tracker,
+    ).execute(
+        EditRegionRequest(
+            image_id=uploaded.image_id,
+            region_id=region.id,
+            operation=EditOperation.WAVE,
+            progress_id="p-1",
+        )
+    )
+
+    stages = [progress.stage for _, progress in tracker.reports]
+    assert stages == [
+        EditStage.SEGMENTING,
+        EditStage.READING_INSTRUCTION,
+        EditStage.LOADING_MODEL,
+        EditStage.GENERATING,
+        EditStage.GENERATING,
+        EditStage.DECODING,
+        EditStage.COMPOSITING,
+        EditStage.DONE,
+    ]
+    assert {progress_id for progress_id, _ in tracker.reports} == {"p-1"}
+    assert tracker.get("p-1").fraction == 1.0
+
+
+def test_without_a_progress_id_nothing_is_reported():
+    storage = FakeImageStorage()
+    repo = FakeImageRepository()
+    uploaded, region = _setup_image_with_region(storage, repo)
+    tracker = RecordingProgressTracker()
+
+    EditRegionUseCase(
+        repo,
+        storage,
+        FakeImageSegmenter(),
+        FakeImageEditor(),
+        FakeImageCompositor(),
+        progress_tracker=tracker,
+    ).execute(
+        EditRegionRequest(image_id=uploaded.image_id, region_id=region.id, operation=EditOperation.WAVE)
+    )
+
+    assert tracker.reports == []

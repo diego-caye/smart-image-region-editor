@@ -53,10 +53,13 @@ app/
                        Sam2MaskPredictor, MediaPipeLandmarker — raw
                        wrappers around Ultralytics/SAM2/MediaPipe, knowing
                        nothing about Domain
-    image_editing/comfyui/ client.py (real HTTP, no WS — polling over
-                       /history), workflow.py (loads the JSON template and
-                       substitutes parameters), workflows/qwen_edit.json,
-                       operation_prompts.py (EditOperation → instruction)
+    image_editing/comfyui/ client.py (HTTP + the /ws websocket for
+                       per-node progress), workflow.py (loads the JSON
+                       template and substitutes parameters),
+                       workflows/qwen_edit.json, operation_prompts.py
+                       (EditOperation → instruction)
+    progress/             InMemoryEditProgressTracker — where a running
+                       edit publishes its stage for polling requests
     storage/              FilesystemImageStorage
     database/             engine, SQLModel models, init_db
     config/               settings.py — single source of environment
@@ -235,8 +238,9 @@ GET  /view?filename=…&subfolder=…&type=…   download a result
 GET  /object_info[/{class}]  schema of each installed node
 GET  /system_stats        GPU/VRAM info
 POST /interrupt            cancel the running execution
-GET  /ws?clientId=…        real-time progress (optional; the MVP client
-                         uses polling over /history instead)
+GET  /ws?clientId=…        real-time events for prompts queued with that
+                         client_id — what the client follows a run with
+                         (see "Edit progress" below)
 ```
 
 Models already installed and confirmed on disk:
@@ -306,6 +310,59 @@ to `region_box_used`'s exact size (Lanczos) before returning it — so
 `PillowImageCompositor` never needs to know anything about the model's
 internal resolution, it only works with pixels that already match the
 cropped mask.
+
+### Edit progress — stages that say what's really happening
+
+An edit takes ~95s in Docker with the default GPU-sharing settings, so the
+UI shows a progress bar with the current stage. The stages come from a
+measurement, not assumptions. Following one real run over ComfyUI's
+websocket (`/ws`, events confirmed in its `execution.py`/`main.py`):
+
+| Time | Event |
+|---|---|
+| 0.3s | the three model **loader** nodes come back `execution_cached` |
+| 1.1–11.7s | the two `TextEncodeQwenImageEditPlus` nodes (~5s each) |
+| 11.7s | `KSampler` starts… |
+| 41.6s | …and reports its first sampling step: **~30s of model loading** |
+| 41.6–48.8s | steps 1–4 |
+| 49.6–53.3s | `VAEDecode`, `SaveImage` → output available |
+| 63.4s | the run is marked finished — after ComfyUI unloads the models |
+
+With `--disable-smart-memory` the loader nodes don't load anything; weights
+load lazily inside the first node that uses them. So "KSampler started"
+means *loading the model*, and only its step events mean *generating* —
+labelling the whole KSampler phase "generating 0/4" would have shown a
+frozen bar for 30s. `ComfyUIImageEditor` maps node events to the domain's
+`EditorStage`s (reading the instruction, loading the model, generating
+step n/m, decoding); `EditRegionUseCase` adds its own around them
+(segmenting with SAM2 before, compositing after).
+
+How the progress reaches the browser: the POST that creates an edit only
+answers once it's done, so the client picks a `progress_id` up front, sends
+it with the POST, and polls `GET /edits/progress/{progress_id}` every
+second meanwhile. The use case publishes each stage to an
+`EditProgressTracker` port; the in-memory implementation is enough for one
+backend process (several workers would need a shared store behind the same
+port). The bar's fraction is stage-based rather than a time estimate,
+because model load time varies too much (cached vs. not) for an estimate to
+be honest; an elapsed-seconds counter shows it's alive during long stages.
+
+Two side effects of switching the client from polling `/history` to the
+websocket: the output is picked up as soon as `SaveImage` runs, instead of
+~10s later when the history entry completes (~4s faster end to end in a
+measured run, since downloading the image overlaps ComfyUI's cleanup); and
+the first real recording of the UI showed the SAM2 masking step taking
+~20s, invisible behind the old spinner — SAM2 is loaded and released on
+every edit to free VRAM for Qwen.
+
+### Before/after slider
+
+The preview is compared in place: the edited image is stacked on the
+original and clipped (`clip-path: inset(...)`) at a divider the user drags.
+For a local edit this shows exactly what changed, and that nothing else
+did, far better than two images side by side. The divider is a native
+`<input type="range">` laid invisibly over the image, which gives mouse,
+touch and arrow-key control without custom event handling.
 
 ### Persistence
 
@@ -405,7 +462,14 @@ real emoji → click an operation → confirmation card).
   fingers" bug (ungrown mask vs. growing it).
 - `backend/tests/unit/infrastructure/` — the Qwen workflow template
   (placeholder substitution, numbers vs. strings, valid node references)
-  and that every `EditOperation` has a prompt.
+  and that every `EditOperation` has a prompt. `test_comfyui_client.py`
+  feeds the websocket handling a scripted message sequence modeled on the
+  measured run (other prompts' events ignored, binary preview frames
+  skipped, errors raised, the history fallback). Progress is also covered
+  from end to end without a GPU: node events → editor stages
+  (`test_comfyui_image_editor_progress.py`), the use case's stage order
+  (`test_edit_region.py`), and the `progress_id` API
+  (`test_edits_api.py`).
 - `backend/tests/integration/test_edits_api.py` — `/images/{id}/edits`,
   `/edits/{id}/confirm|discard` via `TestClient`, with the same
   detector/segmenter/editor fakes as the application tests plus the real
@@ -445,7 +509,11 @@ real emoji → click an operation → confirmation card).
   upload → analyze → select region → select operation → generate preview →
   accept/discard, including that switching region or operation clears any
   previous preview, and that accepting updates the displayed image and
-  leaves the region ready for a second edit).
+  leaves the region ready for a second edit). Progress: `HttpImageApi`
+  polls the right URL while the POST is pending and stops once it settles
+  (fake timers), and `EditorPage` shows each stage's label and percent then
+  drops the bar when the preview arrives. `PreviewComparison` checks the
+  slider moves the clip of the "after" image.
 
 ## Docker
 

@@ -8,12 +8,15 @@ real adapter.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from io import BytesIO
 from itertools import count
 from uuid import UUID
 
 from PIL import Image as PILImage
 
+from app.application.dto.edit_progress import EditProgress
+from app.application.ports.edit_progress_tracker import EditProgressTracker
 from app.domain.entities.edit import Edit
 from app.domain.entities.edit_session import EditSession
 from app.domain.entities.image import Image
@@ -21,7 +24,7 @@ from app.domain.entities.mask import Mask
 from app.domain.entities.region import DetectedRegion
 from app.domain.ports.image_compositor import ImageCompositor
 from app.domain.ports.image_detector import ImageDetector
-from app.domain.ports.image_editor import EditResult, ImageEditor
+from app.domain.ports.image_editor import EditorProgress, EditorStage, EditResult, ImageEditor
 from app.domain.ports.image_repository import ImageRepository
 from app.domain.ports.image_segmenter import ImageSegmenter, SegmentationResult
 from app.domain.ports.image_storage import ImageStorage
@@ -142,7 +145,16 @@ class FakeImageEditor(ImageEditor):
     """By default echoes back a fixed "edited" crop (a real PNG, sized to
     region_box, so it works with the real PillowImageCompositor too — not
     just FakeImageCompositor). Pass should_fail=True to exercise
-    EditRegionUseCase's failure path."""
+    EditRegionUseCase's failure path. Reports the same stage sequence a
+    real Qwen edit goes through, if given on_progress."""
+
+    PROGRESS = (
+        EditorProgress(EditorStage.READING_INSTRUCTION),
+        EditorProgress(EditorStage.LOADING_MODEL),
+        EditorProgress(EditorStage.GENERATING, 1, 2),
+        EditorProgress(EditorStage.GENERATING, 2, 2),
+        EditorProgress(EditorStage.DECODING),
+    )
 
     def __init__(self, should_fail: bool = False) -> None:
         self._should_fail = should_fail
@@ -155,15 +167,30 @@ class FakeImageEditor(ImageEditor):
         region_box: BoundingBox,
         operation: EditOperation,
         reference_image_png_bytes: bytes | None = None,
+        on_progress: Callable[[EditorProgress], None] | None = None,
     ) -> EditResult:
         if self._should_fail:
             raise RuntimeError("fake editor failure")
+        for progress in self.PROGRESS if on_progress else ():
+            on_progress(progress)
         return EditResult(
             edited_region_png_bytes=_solid_png((region_box.width, region_box.height), (0, 255, 0)),
             region_box_used=region_box,
             seed=42,
             model_metadata={"operation": operation.value},
         )
+
+
+class RecordingProgressTracker(EditProgressTracker):
+    def __init__(self) -> None:
+        self.reports: list[tuple[str, EditProgress]] = []
+
+    def report(self, progress_id: str, progress: EditProgress) -> None:
+        self.reports.append((progress_id, progress))
+
+    def get(self, progress_id: str) -> EditProgress | None:
+        matching = [p for pid, p in self.reports if pid == progress_id]
+        return matching[-1] if matching else None
 
 
 class FakeImageCompositor(ImageCompositor):

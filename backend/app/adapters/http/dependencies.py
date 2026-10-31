@@ -13,6 +13,7 @@ from fastapi import Depends
 from sqlmodel import Session
 
 from app.adapters.persistence.sqlalchemy_image_repository import SqlAlchemyImageRepository
+from app.application.ports.edit_progress_tracker import EditProgressTracker
 from app.application.use_cases.analyze_image import AnalyzeImageUseCase
 from app.application.use_cases.confirm_edit import ConfirmEditUseCase
 from app.application.use_cases.discard_edit import DiscardEditUseCase
@@ -28,6 +29,7 @@ from app.domain.ports.image_segmenter import ImageSegmenter
 from app.domain.ports.image_storage import ImageStorage
 from app.infrastructure.config.settings import Settings, get_settings
 from app.infrastructure.database.engine import make_engine
+from app.infrastructure.progress.in_memory_edit_progress_tracker import InMemoryEditProgressTracker
 from app.infrastructure.storage.filesystem_image_storage import FilesystemImageStorage
 
 
@@ -149,9 +151,7 @@ def get_image_editor() -> ImageEditor:
 
     settings = get_settings()
     client = ComfyUIClient(
-        settings.comfyui_base_url,
-        poll_interval_seconds=settings.comfyui_poll_interval_seconds,
-        timeout_seconds=settings.comfyui_timeout_seconds,
+        settings.comfyui_base_url, timeout_seconds=settings.comfyui_timeout_seconds
     )
     return ComfyUIImageEditor(
         client,
@@ -177,14 +177,24 @@ def get_image_compositor() -> ImageCompositor:
     return PillowImageCompositor()
 
 
+@lru_cache
+def get_edit_progress_tracker() -> EditProgressTracker:
+    # One per process: the request running an edit and the requests polling
+    # its progress must see the same store.
+    return InMemoryEditProgressTracker()
+
+
 def get_edit_region_use_case(
     repo: ImageRepository = Depends(get_image_repository),
     storage: ImageStorage = Depends(get_image_storage),
     segmenter: ImageSegmenter = Depends(get_image_segmenter),
     editor: ImageEditor = Depends(get_image_editor),
     compositor: ImageCompositor = Depends(get_image_compositor),
+    progress_tracker: EditProgressTracker = Depends(get_edit_progress_tracker),
 ) -> EditRegionUseCase:
-    return EditRegionUseCase(repo, storage, segmenter, editor, compositor)
+    return EditRegionUseCase(
+        repo, storage, segmenter, editor, compositor, progress_tracker=progress_tracker
+    )
 
 
 def get_confirm_edit_use_case(

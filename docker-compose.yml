@@ -41,7 +41,6 @@ services:
       # rather use your own native ComfyUI install (e.g. one with custom
       # nodes/models already set up).
       COMFYUI_BASE_URL: ${COMFYUI_BASE_URL:-http://comfyui:8188}
-      COMFYUI_POLL_INTERVAL_SECONDS: "1.0"
       COMFYUI_TIMEOUT_SECONDS: "180.0"
       STORAGE_ROOT: /app/data/images
       DATABASE_URL: sqlite:////app/data/app.db

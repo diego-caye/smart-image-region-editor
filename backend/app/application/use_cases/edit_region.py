@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from app.application.dto.edit_progress import EditProgress, EditStage
 from app.application.dto.edit_region import EditRegionRequest, EditRegionResult
+from app.application.ports.edit_progress_tracker import EditProgressTracker
 from app.domain.entities.edit import Edit
 from app.domain.entities.mask import Mask
 from app.domain.ports.image_compositor import ImageCompositor
@@ -47,6 +50,7 @@ class EditRegionUseCase:
         image_editor: ImageEditor,
         image_compositor: ImageCompositor,
         mask_feather_px: int = DEFAULT_MASK_FEATHER_PX,
+        progress_tracker: EditProgressTracker | None = None,
     ) -> None:
         self._repo = image_repository
         self._storage = image_storage
@@ -54,6 +58,7 @@ class EditRegionUseCase:
         self._editor = image_editor
         self._compositor = image_compositor
         self._mask_feather_px = mask_feather_px
+        self._progress_tracker = progress_tracker
 
     def execute(self, request: EditRegionRequest) -> EditRegionResult:
         image = self._repo.get_image(request.image_id)
@@ -83,6 +88,8 @@ class EditRegionUseCase:
         self._repo.save_edit(edit)
 
         try:
+            report = self._reporter(request.progress_id)
+            report(EditProgress.at(EditStage.SEGMENTING))
             current_image_bytes = self._storage.load(session.current_image_ref)
             mask = self._get_or_create_mask(current_image_bytes, region)
             mask_bytes = self._storage.load(mask.storage_ref)
@@ -92,8 +99,10 @@ class EditRegionUseCase:
                 mask_png_bytes=mask_bytes,
                 region_box=region.bounding_box,
                 operation=request.operation,
+                on_progress=lambda p: report(EditProgress.from_editor(p)),
             )
 
+            report(EditProgress.at(EditStage.COMPOSITING))
             composited_bytes = self._compositor.composite(
                 original_png_bytes=current_image_bytes,
                 edited_region_png_bytes=editor_result.edited_region_png_bytes,
@@ -108,6 +117,7 @@ class EditRegionUseCase:
                 preview_ref, seed=editor_result.seed, model_metadata=editor_result.model_metadata
             )
             self._repo.save_edit(edit)
+            report(EditProgress.at(EditStage.DONE))
 
             return EditRegionResult(
                 edit_id=edit.id, status=edit.status, preview_url=self._storage.url_for(preview_ref)
@@ -121,6 +131,12 @@ class EditRegionUseCase:
             return EditRegionResult(
                 edit_id=edit.id, status=edit.status, preview_url=None, error_message=str(exc)
             )
+
+    def _reporter(self, progress_id: str | None) -> Callable[[EditProgress], None]:
+        if progress_id is None or self._progress_tracker is None:
+            return lambda _progress: None
+        tracker = self._progress_tracker
+        return lambda progress: tracker.report(progress_id, progress)
 
     def _get_or_create_mask(self, image_bytes: bytes, region: DetectedRegion) -> Mask:
         if region.mask_id is not None:

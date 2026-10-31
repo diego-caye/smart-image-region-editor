@@ -7,6 +7,7 @@ import type {
 import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
 import type { EditOperation } from "../../domain/types/EditOperation";
+import type { EditProgress } from "../../domain/types/EditProgress";
 import type { RegionType } from "../../domain/types/RegionType";
 
 /** In-memory ImageApiPort double for component/hook tests — no fetch, no
@@ -59,12 +60,33 @@ export class FakeImageApiPort implements ImageApiPort {
     return this.operationsByRegion[regionType] ?? [];
   }
 
+  /** Set holdEdits to keep requestEdit pending (so a test can push progress
+   * through reportProgress) until releaseEdit() is called. */
+  holdEdits = false;
+  private onProgress: ((progress: EditProgress) => void) | null = null;
+  private release: (() => void) | null = null;
+
+  reportProgress(progress: EditProgress): void {
+    this.onProgress?.(progress);
+  }
+
+  releaseEdit(): void {
+    this.release?.();
+  }
+
   async requestEdit(
     imageId: string,
     regionId: string,
     operation: EditOperation,
+    onProgress?: (progress: EditProgress) => void,
   ): Promise<EditGenerationResult> {
     this.requestedEdits.push({ imageId, regionId, operation });
+    this.onProgress = onProgress ?? null;
+    if (this.holdEdits) {
+      await new Promise<void>((resolve) => {
+        this.release = resolve;
+      });
+    }
     if (this.nextEditResult instanceof Error) throw this.nextEditResult;
     return this.nextEditResult;
   }

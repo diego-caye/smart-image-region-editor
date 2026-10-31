@@ -15,6 +15,7 @@ from PIL import Image as PILImage
 from sqlmodel import Session
 
 from app.adapters.http.dependencies import (
+    get_edit_progress_tracker,
     get_image_compositor,
     get_image_detector,
     get_image_editor,
@@ -28,6 +29,7 @@ from app.domain.value_objects.bounding_box import BoundingBox
 from app.domain.value_objects.region_type import RegionType
 from app.infrastructure.config.settings import Settings
 from app.infrastructure.database.engine import init_db, make_engine
+from app.infrastructure.progress.in_memory_edit_progress_tracker import InMemoryEditProgressTracker
 from app.infrastructure.storage.filesystem_image_storage import FilesystemImageStorage
 from app.main import app
 from tests.unit.application.fakes import FakeImageDetector, FakeImageEditor, FakeImageSegmenter
@@ -57,6 +59,8 @@ def _client(tmp_path, *, editor_should_fail: bool = False) -> TestClient:
         should_fail=editor_should_fail
     )
     app.dependency_overrides[get_image_compositor] = lambda: PillowImageCompositor()
+    tracker = InMemoryEditProgressTracker()
+    app.dependency_overrides[get_edit_progress_tracker] = lambda: tracker
 
     def override_session():
         with Session(engine) as session:
@@ -183,3 +187,31 @@ def test_confirm_unknown_edit_404s(tmp_path):
 
     response = client.post(f"/edits/{uuid4()}/confirm")
     assert response.status_code == 404
+
+
+def test_progress_can_be_read_by_the_id_the_client_chose(tmp_path):
+    client = _client(tmp_path)
+    image_id, region_id = _upload_and_analyze(client)
+
+    assert client.get("/edits/progress/my-edit-1").status_code == 404  # nothing reported yet
+
+    client.post(
+        f"/images/{image_id}/edits",
+        json={"region_id": region_id, "operation": "peace_sign", "progress_id": "my-edit-1"},
+    )
+
+    progress = client.get("/edits/progress/my-edit-1")
+    assert progress.status_code == 200
+    assert progress.json() == {"stage": "done", "fraction": 1.0, "step": None, "steps": None}
+
+
+def test_progress_id_must_be_a_simple_token(tmp_path):
+    client = _client(tmp_path)
+    image_id, region_id = _upload_and_analyze(client)
+
+    response = client.post(
+        f"/images/{image_id}/edits",
+        json={"region_id": region_id, "operation": "peace_sign", "progress_id": "../../etc"},
+    )
+
+    assert response.status_code == 422

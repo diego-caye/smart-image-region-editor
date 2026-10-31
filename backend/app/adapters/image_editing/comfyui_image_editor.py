@@ -11,14 +11,15 @@ docs/architecture.md.
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
 from io import BytesIO
 
 from PIL import Image as PILImage
 
-from app.domain.ports.image_editor import EditResult, ImageEditor
+from app.domain.ports.image_editor import EditorProgress, EditorStage, EditResult, ImageEditor
 from app.domain.value_objects.bounding_box import BoundingBox
 from app.domain.value_objects.edit_operation import EditOperation
-from app.infrastructure.image_editing.comfyui.client import ComfyUIClient
+from app.infrastructure.image_editing.comfyui.client import ComfyUIClient, NodeEvent
 from app.infrastructure.image_editing.comfyui.operation_prompts import prompt_for
 from app.infrastructure.image_editing.comfyui.workflow import (
     OUTPUT_NODE_ID,
@@ -67,6 +68,7 @@ class ComfyUIImageEditor(ImageEditor):
         region_box: BoundingBox,
         operation: EditOperation,
         reference_image_png_bytes: bytes | None = None,
+        on_progress: Callable[[EditorProgress], None] | None = None,
     ) -> EditResult:
         # reference_image_png_bytes (a future gesture/expression reference
         # photo) isn't wired into the workflow yet — it would map to the
@@ -103,7 +105,11 @@ class ComfyUIImageEditor(ImageEditor):
             )
         )
 
-        result_bytes = self._client.run_prompt(prompt_graph, output_node_id=OUTPUT_NODE_ID)
+        result_bytes = self._client.run_prompt(
+            prompt_graph,
+            output_node_id=OUTPUT_NODE_ID,
+            on_event=_progress_translator(on_progress) if on_progress else None,
+        )
 
         # Qwen Image Edit outputs at its own preferred resolution, not
         # necessarily the crop's — resize back so the compositor can treat
@@ -124,6 +130,33 @@ class ComfyUIImageEditor(ImageEditor):
                 "prompt": prompt_text,
             },
         )
+
+
+# Node classes of workflows/qwen_edit.json that mark a user-visible stage;
+# the rest (LoadImage, scaling, VAEEncode, reference latents) take well
+# under a second and aren't worth a label. The loader nodes are absent on
+# purpose: measured on a real run they come back cached in ~0.3s, while the
+# actual weight loading happens lazily inside the node that first uses a
+# model — ~10s across the two text encoders, then ~30s inside KSampler
+# before its first sampling step. Hence KSampler *starting* means
+# "loading the model", and only its progress events mean "generating".
+_STAGE_BY_NODE_CLASS = {
+    "TextEncodeQwenImageEditPlus": EditorStage.READING_INSTRUCTION,
+    "KSampler": EditorStage.LOADING_MODEL,
+    "VAEDecode": EditorStage.DECODING,
+}
+
+
+def _progress_translator(
+    on_progress: Callable[[EditorProgress], None],
+) -> Callable[[NodeEvent], None]:
+    def translate(event: NodeEvent) -> None:
+        if event.step is not None:
+            on_progress(EditorProgress(EditorStage.GENERATING, event.step, event.steps))
+        elif (stage := _STAGE_BY_NODE_CLASS.get(event.class_type)) is not None:
+            on_progress(EditorProgress(stage))
+
+    return translate
 
 
 def _to_png_bytes(image: PILImage.Image) -> bytes:

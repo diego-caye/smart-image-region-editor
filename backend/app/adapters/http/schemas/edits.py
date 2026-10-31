@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from app.application.dto.edit_progress import EditStage
 from app.domain.entities.edit import EditStatus
 from app.domain.value_objects.edit_operation import EditOperation
 
@@ -11,6 +12,16 @@ from app.domain.value_objects.edit_operation import EditOperation
 class EditRegionRequestBody(BaseModel):
     region_id: UUID
     operation: EditOperation
+    # Chosen by the client so it can poll GET /edits/progress/{progress_id}
+    # while this request is still running (a UUID in practice).
+    progress_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+
+
+class EditProgressResponse(BaseModel):
+    stage: EditStage
+    fraction: float
+    step: int | None = None
+    steps: int | None = None
 
 
 class EditRegionResponse(BaseModel):

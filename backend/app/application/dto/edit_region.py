@@ -12,6 +12,7 @@ class EditRegionRequest:
     image_id: UUID
     region_id: UUID
     operation: EditOperation
+    progress_id: str | None = None  # see EditProgressTracker
 
 
 @dataclass(slots=True)

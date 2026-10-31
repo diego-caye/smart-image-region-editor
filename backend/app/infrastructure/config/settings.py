@@ -30,7 +30,6 @@ class Settings(BaseSettings):
 
     # --- ComfyUI (infrastructure/image_editing/comfyui) ---
     comfyui_base_url: str = "http://127.0.0.1:8188"
-    comfyui_poll_interval_seconds: float = 1.0
     comfyui_timeout_seconds: float = 180.0
 
     # Qwen Image Edit model files + sampling params — verified against the
