@@ -15,6 +15,12 @@ class EditSessionNotFound(ValueError):
     pass
 
 
+class StalePreview(ValueError):
+    """The preview was made on top of an image that is no longer the
+    current one (another edit was confirmed, or one was undone, since) —
+    accepting it would silently drop that change."""
+
+
 class ConfirmEditUseCase:
     """Confirming an edit makes its result the session's new current image,
     so the *next* edit (e.g. mouth, after hand) applies on top of it instead
@@ -30,12 +36,14 @@ class ConfirmEditUseCase:
         if edit is None:
             raise EditNotFound(str(edit_id))
 
-        edit.confirm()
-        self._repo.save_edit(edit)
-
         session = self._repo.get_edit_session(edit.session_id)
         if session is None:
             raise EditSessionNotFound(str(edit.session_id))
+        if not session.is_current(edit.source_image_ref):
+            raise StalePreview(str(edit_id))
+
+        edit.confirm()
+        self._repo.save_edit(edit)
         session.advance_after_confirm(edit.final_ref)
         self._repo.save_edit_session(session)
 

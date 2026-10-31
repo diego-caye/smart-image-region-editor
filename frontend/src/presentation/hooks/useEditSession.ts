@@ -1,9 +1,12 @@
 import { useCallback } from "react";
 import { analyzeImage } from "../../application/use-cases/analyzeImage";
 import { confirmEdit as confirmEditUseCase } from "../../application/use-cases/confirmEdit";
+import { currentImageDownloadUrl } from "../../application/use-cases/currentImageDownloadUrl";
 import { discardEdit as discardEditUseCase } from "../../application/use-cases/discardEdit";
+import { getEditHistory } from "../../application/use-cases/getEditHistory";
 import { listOperationsForRegion } from "../../application/use-cases/listOperationsForRegion";
 import { requestEdit as requestEditUseCase } from "../../application/use-cases/requestEdit";
+import { undoLastEdit as undoLastEditUseCase } from "../../application/use-cases/undoLastEdit";
 import { uploadImage } from "../../application/use-cases/uploadImage";
 import type { EditOperation } from "../../domain/types/EditOperation";
 import type { GarmentColor } from "../../domain/types/GarmentColor";
@@ -20,6 +23,20 @@ function messageFrom(error: unknown): string {
  */
 export function useEditSession() {
   const { state, dispatch, api } = useEditSessionContext();
+
+  // Best-effort: the history panel just keeps its previous contents if this
+  // fails — never a reason to report the confirm/undo itself as failed.
+  const refreshHistory = useCallback(
+    async (imageId: string) => {
+      try {
+        const history = await getEditHistory(api, imageId);
+        dispatch({ type: "HISTORY_SUCCESS", entries: history.entries, canUndo: history.canUndo });
+      } catch {
+        // keep the last known history
+      }
+    },
+    [api, dispatch],
+  );
 
   const upload = useCallback(
     async (file: File) => {
@@ -113,10 +130,25 @@ export function useEditSession() {
     try {
       const result = await confirmEditUseCase(api, state.editId);
       dispatch({ type: "CONFIRM_SUCCESS", finalUrl: result.finalUrl });
+      if (state.image) await refreshHistory(state.image.imageId);
     } catch (error) {
       dispatch({ type: "CONFIRM_ERROR", message: messageFrom(error) });
     }
-  }, [api, dispatch, state.editId]);
+  }, [api, dispatch, state.editId, state.image, refreshHistory]);
+
+  const undoLastEdit = useCallback(async () => {
+    if (!state.image) return;
+    dispatch({ type: "UNDO_START" });
+    try {
+      const result = await undoLastEditUseCase(api, state.image.imageId);
+      dispatch({ type: "UNDO_SUCCESS", currentUrl: result.currentUrl });
+      await refreshHistory(state.image.imageId);
+    } catch (error) {
+      dispatch({ type: "UNDO_ERROR", message: messageFrom(error) });
+    }
+  }, [api, dispatch, state.image, refreshHistory]);
+
+  const downloadUrl = state.image ? currentImageDownloadUrl(api, state.image.imageId) : null;
 
   const discardEdit = useCallback(async () => {
     if (!state.editId) return;
@@ -139,5 +171,7 @@ export function useEditSession() {
     requestEdit,
     confirmEdit,
     discardEdit,
+    undoLastEdit,
+    downloadUrl,
   };
 }

@@ -9,6 +9,8 @@ isolated to tmp_path exactly like test_images_api.py.
 from __future__ import annotations
 
 import io
+import re
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from PIL import Image as PILImage
@@ -227,3 +229,65 @@ def test_progress_id_must_be_a_simple_token(tmp_path):
     )
 
     assert response.status_code == 422
+
+
+def _apply(client: TestClient, image_id: str, region_id: str, operation: str) -> str:
+    edit = client.post(
+        f"/images/{image_id}/edits", json={"region_id": region_id, "operation": operation}
+    ).json()
+    client.post(f"/edits/{edit['edit_id']}/confirm")
+    return edit["edit_id"]
+
+
+def test_history_undo_and_download(tmp_path):
+    client = _client(tmp_path)
+    image_id, region_id = _upload_and_analyze(client)
+    original = client.get(f"/images/{image_id}/download")
+    wave_id = _apply(client, image_id, region_id, "wave")
+
+    history = client.get(f"/images/{image_id}/history").json()
+    assert [e["edit_id"] for e in history["entries"]] == [wave_id]
+    assert history["entries"][0]["operation"] == "wave"
+    assert history["entries"][0]["label"] == "Wave"
+    assert history["can_undo"] is True
+
+    edited = client.get(f"/images/{image_id}/download")
+    assert edited.status_code == 200
+    assert edited.headers["content-type"] == "image/png"
+    assert edited.headers["content-disposition"] == 'attachment; filename="photo-edited.png"'
+    assert edited.content != original.content
+
+    undo = client.post(f"/images/{image_id}/undo")
+    assert undo.status_code == 200
+    assert undo.json()["reverted_edit_id"] == wave_id
+    assert client.get(f"/images/{image_id}/download").content == original.content
+
+    assert client.post(f"/images/{image_id}/undo").status_code == 409
+
+
+def test_accepting_a_preview_made_before_an_undo_is_a_conflict(tmp_path):
+    client = _client(tmp_path)
+    image_id, region_id = _upload_and_analyze(client)
+    _apply(client, image_id, region_id, "wave")
+    stale = client.post(
+        f"/images/{image_id}/edits", json={"region_id": region_id, "operation": "fist"}
+    ).json()
+    client.post(f"/images/{image_id}/undo")
+
+    assert client.post(f"/edits/{stale['edit_id']}/confirm").status_code == 409
+
+
+def test_download_sanitizes_the_uploaded_filename(tmp_path):
+    client = _client(tmp_path)
+    upload = client.post(
+        "/images", files={"file": ('my "photo";\r\nx.png', _png_bytes(), "image/png")}
+    )
+    response = client.get(f"/images/{upload.json()['image_id']}/download")
+    disposition = response.headers["content-disposition"]
+    assert re.fullmatch(r'attachment; filename="[A-Za-z0-9._-]+\.png"', disposition)
+
+
+def test_history_404s_for_an_unknown_image(tmp_path):
+    client = _client(tmp_path)
+    assert client.get(f"/images/{uuid4()}/history").status_code == 404
+    assert client.get(f"/images/{uuid4()}/download").status_code == 404

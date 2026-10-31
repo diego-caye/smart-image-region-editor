@@ -90,6 +90,15 @@ once confirmed, its `final_ref` becomes the session's new
 applies the second edit on top of the first one's result, not the original.
 Discarding an edit doesn't touch the session at all.
 
+Undo is the same chain walked backwards: the last confirmed edit becomes
+`REVERTED` and the session goes back to that edit's `source_image_ref`.
+Nothing is deleted, so the history still shows it (struck through), and a
+new edit after an undo simply builds on the restored image. One rule keeps
+this honest: a preview can only be accepted while the image it was made
+on is still the current one (`EditSession.is_current`). Otherwise a
+preview generated before an undo — or before another edit was accepted —
+would silently bring back, or drop, a change.
+
 ### Detection/segmentation: our own stack in the backend, not via ComfyUI
 
 A deliberate design decision. Trade-off: backend and ComfyUI share a single

@@ -3,9 +3,11 @@ import type {
   EditGenerationResult,
   ImageApiPort,
   OperationCatalogEntry,
+  UndoResult,
 } from "../../application/ports/ImageApiPort";
 import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
+import type { EditHistory } from "../../domain/types/EditHistory";
 import type { EditOperation } from "../../domain/types/EditOperation";
 import type { EditProgress } from "../../domain/types/EditProgress";
 import type { GarmentColor } from "../../domain/types/GarmentColor";
@@ -44,6 +46,24 @@ interface OperationResponseBody {
 interface ListOperationsResponseBody {
   region_type: RegionType;
   operations: OperationResponseBody[];
+}
+
+interface EditHistoryResponseBody {
+  entries: {
+    edit_id: string;
+    region_type: RegionType | null;
+    operation: EditOperation;
+    label: string;
+    emoji: string;
+    color: GarmentColor | null;
+    status: "confirmed" | "reverted";
+  }[];
+  can_undo: boolean;
+}
+
+interface UndoResponseBody {
+  reverted_edit_id: string;
+  current_url: string;
 }
 
 interface EditRegionResponseBody {
@@ -133,6 +153,31 @@ export class HttpImageApi implements ImageApiPort {
 
   async discardEdit(editId: string): Promise<void> {
     await httpClient.post(`/edits/${editId}/discard`);
+  }
+
+  async getEditHistory(imageId: string): Promise<EditHistory> {
+    const body = await httpClient.get<EditHistoryResponseBody>(`/images/${imageId}/history`);
+    return {
+      entries: body.entries.map((e) => ({
+        editId: e.edit_id,
+        regionType: e.region_type,
+        operation: e.operation,
+        label: e.label,
+        emoji: e.emoji,
+        color: e.color,
+        status: e.status,
+      })),
+      canUndo: body.can_undo,
+    };
+  }
+
+  async undoLastEdit(imageId: string): Promise<UndoResult> {
+    const body = await httpClient.post<UndoResponseBody>(`/images/${imageId}/undo`);
+    return { revertedEditId: body.reverted_edit_id, currentUrl: resolveAssetUrl(body.current_url) };
+  }
+
+  downloadUrl(imageId: string): string {
+    return resolveAssetUrl(`/images/${imageId}/download`);
   }
 }
 

@@ -1,5 +1,6 @@
 import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
+import type { EditHistory } from "../../domain/types/EditHistory";
 import type { EditOperation } from "../../domain/types/EditOperation";
 import type { EditProgress } from "../../domain/types/EditProgress";
 import type { GarmentColor } from "../../domain/types/GarmentColor";
@@ -25,6 +26,11 @@ export interface ConfirmEditResult {
   finalUrl: string;
 }
 
+export interface UndoResult {
+  revertedEditId: string;
+  currentUrl: string;
+}
+
 /**
  * Everything Application knows about talking to a backend — no fetch, no
  * endpoint paths, no HTTP status codes here. adapters/http/HttpImageApi is
@@ -48,4 +54,10 @@ export interface ImageApiPort {
   ): Promise<EditGenerationResult>;
   confirmEdit(editId: string): Promise<ConfirmEditResult>;
   discardEdit(editId: string): Promise<void>;
+  getEditHistory(imageId: string): Promise<EditHistory>;
+  /** Reverts the last applied edit; the image goes back to what it was
+   * before it. */
+  undoLastEdit(imageId: string): Promise<UndoResult>;
+  /** Where the current image can be downloaded from, as a file. */
+  downloadUrl(imageId: string): string;
 }

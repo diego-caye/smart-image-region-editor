@@ -16,6 +16,7 @@ class EditStatus(StrEnum):
     CONFIRMED = "confirmed"
     DISCARDED = "discarded"
     FAILED = "failed"
+    REVERTED = "reverted"  # was confirmed, then undone
 
 
 class InvalidEditTransition(ValueError):
@@ -85,6 +86,11 @@ class Edit:
         if self.status not in (EditStatus.PREVIEW_READY, EditStatus.FAILED):
             raise InvalidEditTransition(f"Cannot discard an edit in status '{self.status}'")
         self._transition(EditStatus.DISCARDED)
+
+    def revert(self) -> None:
+        if self.status != EditStatus.CONFIRMED:
+            raise InvalidEditTransition(f"Cannot revert an edit in status '{self.status}'")
+        self._transition(EditStatus.REVERTED)
 
     def mark_failed(self, error_message: str) -> None:
         self.error_message = error_message

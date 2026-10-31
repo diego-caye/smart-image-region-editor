@@ -169,9 +169,10 @@ Endpoints available today:
   MediaPipe mouth/eyes/body/torso/limbs) and persists the found regions.
 - `GET /images/{id}/regions` — re-reads the already-detected regions.
 - `GET /regions/{region_type}/operations` — catalog of operations valid for a
-  region type (e.g. `right_hand` → wave/peace/thumbs-up/fist, `legs` →
-  blue jeans/shorts).
-- `POST /images/{id}/edits` — `{region_id, operation}` → real localized
+  region type (e.g. `right_hand` → wave/peace/thumbs-up/fist/gloves, `legs`
+  → blue jeans/pants color/shorts), each with the colors it can take (an
+  empty list for most).
+- `POST /images/{id}/edits` — `{region_id, operation, color?}` → real localized
   editing (SAM2 + Qwen Image Edit via ComfyUI + composition), returns a
   preview without touching the "official" image yet. Takes ~95s in Docker
   with the default GPU-sharing settings, measured: ~20s masking with SAM2,
@@ -187,6 +188,14 @@ Endpoints available today:
   image; the next edit is applied on top of this result, not the original.
 - `POST /edits/{id}/discard` — discards the preview, the session doesn't
   change.
+- `GET /images/{id}/history` — the edits applied so far, oldest first,
+  including undone ones (marked `reverted`), and whether there's one to undo.
+- `POST /images/{id}/undo` — reverts the last applied edit: the image goes
+  back to what it was before it. Repeatable, down to the original; 409 when
+  there's nothing left. A preview made before an undo can no longer be
+  accepted (409 on confirm) — it was made on an image that's gone.
+- `GET /images/{id}/download` — the image as it is now, as a file
+  (`<name>-edited.png` once something was applied).
 - `GET /static/{storage_ref}` — serves the bytes of a saved image.
 
 ### Golden dataset / evaluation

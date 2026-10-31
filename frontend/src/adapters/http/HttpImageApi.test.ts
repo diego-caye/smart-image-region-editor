@@ -215,4 +215,54 @@ describe("HttpImageApi", () => {
       message: "Image not found",
     });
   });
+
+  it("maps the edit history and undo responses", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          image_id: "img-1",
+          original_url: "/static/original/1.png",
+          current_url: "/static/final/2.png",
+          entries: [
+            {
+              edit_id: "e-1",
+              region_type: "torso",
+              operation: "hoodie",
+              label: "Hoodie",
+              emoji: "👚",
+              color: "yellow",
+              status: "confirmed",
+              result_url: "/static/final/2.png",
+              created_at: "2026-10-30T20:00:00Z",
+            },
+          ],
+          can_undo: true,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ reverted_edit_id: "e-1", current_url: "/static/original/1.png" }),
+      );
+    const api = new HttpImageApi();
+
+    expect(await api.getEditHistory("img-1")).toEqual({
+      entries: [
+        {
+          editId: "e-1",
+          regionType: "torso",
+          operation: "hoodie",
+          label: "Hoodie",
+          emoji: "👚",
+          color: "yellow",
+          status: "confirmed",
+        },
+      ],
+      canUndo: true,
+    });
+    expect(await api.undoLastEdit("img-1")).toEqual({
+      revertedEditId: "e-1",
+      currentUrl: "http://127.0.0.1:8420/static/original/1.png",
+    });
+    expect(vi.mocked(fetch).mock.calls[1][0]).toBe("http://127.0.0.1:8420/images/img-1/undo");
+    expect(api.downloadUrl("img-1")).toBe("http://127.0.0.1:8420/images/img-1/download");
+  });
 });

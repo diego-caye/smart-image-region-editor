@@ -36,6 +36,11 @@ _OPERATION_DISPLAY: dict[EditOperation, tuple[str, str]] = {
 }
 
 
+def operation_display(operation: EditOperation) -> tuple[str, str]:
+    """(emoji, label) for an operation."""
+    return _OPERATION_DISPLAY[operation]
+
+
 class OperationResponse(BaseModel):
     operation: EditOperation
     label: str
@@ -46,7 +51,7 @@ class OperationResponse(BaseModel):
 
     @staticmethod
     def from_operation(operation: EditOperation) -> OperationResponse:
-        emoji, label = _OPERATION_DISPLAY[operation]
+        emoji, label = operation_display(operation)
         return OperationResponse(
             operation=operation,
             label=label,

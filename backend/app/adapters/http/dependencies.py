@@ -18,8 +18,11 @@ from app.application.use_cases.analyze_image import AnalyzeImageUseCase
 from app.application.use_cases.confirm_edit import ConfirmEditUseCase
 from app.application.use_cases.discard_edit import DiscardEditUseCase
 from app.application.use_cases.edit_region import EditRegionUseCase
+from app.application.use_cases.get_current_image import GetCurrentImageUseCase
 from app.application.use_cases.get_detected_regions import GetDetectedRegionsUseCase
+from app.application.use_cases.get_edit_history import GetEditHistoryUseCase
 from app.application.use_cases.list_operations_for_region import ListOperationsForRegionUseCase
+from app.application.use_cases.undo_last_edit import UndoLastEditUseCase
 from app.application.use_cases.upload_image import UploadImageUseCase
 from app.domain.ports.image_compositor import ImageCompositor
 from app.domain.ports.image_detector import ImageDetector
@@ -211,3 +214,24 @@ def get_discard_edit_use_case(
     repo: ImageRepository = Depends(get_image_repository),
 ) -> DiscardEditUseCase:
     return DiscardEditUseCase(repo)
+
+
+def get_edit_history_use_case(
+    repo: ImageRepository = Depends(get_image_repository),
+    storage: ImageStorage = Depends(get_image_storage),
+) -> GetEditHistoryUseCase:
+    return GetEditHistoryUseCase(repo, storage)
+
+
+def get_undo_last_edit_use_case(
+    repo: ImageRepository = Depends(get_image_repository),
+    storage: ImageStorage = Depends(get_image_storage),
+) -> UndoLastEditUseCase:
+    return UndoLastEditUseCase(repo, storage)
+
+
+def get_current_image_use_case(
+    repo: ImageRepository = Depends(get_image_repository),
+    storage: ImageStorage = Depends(get_image_storage),
+) -> GetCurrentImageUseCase:
+    return GetCurrentImageUseCase(repo, storage)

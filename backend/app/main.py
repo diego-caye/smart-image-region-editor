@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.http.controllers import (
     edits_controller,
+    history_controller,
     images_controller,
     operations_controller,
     static_files_controller,
@@ -32,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(operations_controller.router)
     app.include_router(edits_controller.images_edits_router)
     app.include_router(edits_controller.edits_router)
+    app.include_router(history_controller.router)
     app.include_router(static_files_controller.router)
 
     @app.get("/health", tags=["meta"])

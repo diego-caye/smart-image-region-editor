@@ -26,3 +26,13 @@ class EditSession:
 
     def advance_after_confirm(self, new_current_image_ref: str) -> None:
         self.current_image_ref = new_current_image_ref
+
+    def is_current(self, image_ref: str) -> bool:
+        """Whether an edit made on top of image_ref would still apply on top
+        of the current image — False once another edit was confirmed or
+        undone since."""
+        return image_ref == self.current_image_ref
+
+    def revert_to(self, previous_image_ref: str) -> None:
+        """Undo: go back to the image the reverted edit was applied on."""
+        self.current_image_ref = previous_image_ref

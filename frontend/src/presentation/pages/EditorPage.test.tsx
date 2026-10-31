@@ -294,4 +294,60 @@ describe("EditorPage", () => {
     // still on the same region's operation gallery, not reset further
     expect(screen.getByText("2. Choose a transformation")).toBeInTheDocument();
   });
+
+  it("lists applied edits, undoes the last one and offers the current image for download", async () => {
+    const api = new FakeImageApiPort();
+    api.nextConfirmResult = { editId: "edit-1", finalUrl: "http://example.test/static/final/1.png" };
+    const user = await setUpToOperationSelected(api);
+
+    expect(screen.getByText("No edits applied yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Undo last edit" })).toBeDisabled();
+    expect(screen.getByRole("link", { name: "Download image" })).toHaveAttribute(
+      "href",
+      "http://example.test/images/fake-image-id/download",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Generate preview" }));
+    await waitFor(() => screen.getByRole("button", { name: "Accept" }));
+    api.history = {
+      entries: [
+        {
+          editId: "edit-1",
+          regionType: "right_hand",
+          operation: "peace_sign",
+          label: "Peace sign",
+          emoji: "✌️",
+          color: null,
+          status: "confirmed",
+        },
+      ],
+      canUndo: true,
+    };
+    await user.click(screen.getByRole("button", { name: "Accept" }));
+
+    const list = await screen.findByRole("list", { name: "Applied edits" });
+    expect(list).toHaveTextContent("Right hand → Peace sign");
+    const undo = screen.getByRole("button", { name: "Undo last edit" });
+    expect(undo).toBeEnabled();
+
+    api.nextUndoResult = {
+      revertedEditId: "edit-1",
+      currentUrl: "http://example.test/static/original/fake.png",
+    };
+    api.history = {
+      entries: [{ ...api.history.entries[0], status: "reverted" }],
+      canUndo: false,
+    };
+    await user.click(undo);
+
+    await waitFor(() => {
+      expect(screen.getByAltText("Uploaded image")).toHaveAttribute(
+        "src",
+        "http://example.test/static/original/fake.png",
+      );
+    });
+    expect(api.undoneImageIds).toEqual(["fake-image-id"]);
+    expect(await screen.findByText("Undone")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Undo last edit" })).toBeDisabled();
+  });
 });

@@ -3,6 +3,7 @@ import { HttpImageApi } from "../../adapters/http/HttpImageApi";
 import type { ImageApiPort, OperationCatalogEntry } from "../../application/ports/ImageApiPort";
 import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
+import type { EditHistoryEntry } from "../../domain/types/EditHistory";
 import type { EditOperation } from "../../domain/types/EditOperation";
 import type { EditProgress } from "../../domain/types/EditProgress";
 import type { GarmentColor } from "../../domain/types/GarmentColor";
@@ -45,6 +46,12 @@ export interface EditSessionState {
   editBeforeUrl: string | null;
   previewUrl: string | null;
   editConfirmStatus: EditConfirmStatus;
+
+  // Edits applied to the image so far (oldest first), including undone ones.
+  history: EditHistoryEntry[];
+  canUndo: boolean;
+  isUndoing: boolean;
+  undoError: string | null;
 }
 
 export type EditSessionAction =
@@ -75,7 +82,11 @@ export type EditSessionAction =
   | { type: "CONFIRM_ERROR"; message: string }
   | { type: "DISCARD_START" }
   | { type: "DISCARD_SUCCESS" }
-  | { type: "DISCARD_ERROR"; message: string };
+  | { type: "DISCARD_ERROR"; message: string }
+  | { type: "HISTORY_SUCCESS"; entries: EditHistoryEntry[]; canUndo: boolean }
+  | { type: "UNDO_START" }
+  | { type: "UNDO_SUCCESS"; currentUrl: string }
+  | { type: "UNDO_ERROR"; message: string };
 
 const initialState: EditSessionState = {
   status: "idle",
@@ -98,6 +109,10 @@ const initialState: EditSessionState = {
   editBeforeUrl: null,
   previewUrl: null,
   editConfirmStatus: "idle",
+  history: [],
+  canUndo: false,
+  isUndoing: false,
+  undoError: null,
 };
 
 const clearedEditState = {
@@ -213,6 +228,27 @@ function reducer(state: EditSessionState, action: EditSessionAction): EditSessio
       };
     case "CONFIRM_ERROR":
       return { ...state, editConfirmStatus: "error", editError: action.message };
+
+    case "HISTORY_SUCCESS":
+      return { ...state, history: action.entries, canUndo: action.canUndo };
+    case "UNDO_START":
+      return { ...state, isUndoing: true, undoError: null };
+    // Like accepting an edit, undoing changes the image every pending
+    // selection and preview was made against, so they're cleared.
+    case "UNDO_SUCCESS":
+      return {
+        ...state,
+        isUndoing: false,
+        currentImageUrl: action.currentUrl,
+        selectedRegionId: null,
+        operationsStatus: "idle",
+        operations: [],
+        selectedOperation: null,
+        selectedColor: null,
+        ...clearedEditState,
+      };
+    case "UNDO_ERROR":
+      return { ...state, isUndoing: false, undoError: action.message };
 
     case "DISCARD_START":
       return { ...state, editConfirmStatus: "discarding" };

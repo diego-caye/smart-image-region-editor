@@ -19,7 +19,7 @@ from app.adapters.http.schemas.edits import (
 )
 from app.application.dto.edit_region import EditRegionRequest
 from app.application.ports.edit_progress_tracker import EditProgressTracker
-from app.application.use_cases.confirm_edit import ConfirmEditUseCase
+from app.application.use_cases.confirm_edit import ConfirmEditUseCase, StalePreview
 from app.application.use_cases.confirm_edit import EditNotFound as ConfirmEditNotFound
 from app.application.use_cases.discard_edit import DiscardEditUseCase
 from app.application.use_cases.discard_edit import EditNotFound as DiscardEditNotFound
@@ -93,6 +93,11 @@ def confirm_edit(
         raise HTTPException(status_code=404, detail="Edit not found") from exc
     except InvalidEditTransition as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except StalePreview as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="The image changed since this preview was made — generate it again",
+        ) from exc
 
     return ConfirmEditResponse(edit_id=result.edit_id, status=result.status, final_url=result.final_url)
 

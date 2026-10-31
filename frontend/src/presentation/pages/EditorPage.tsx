@@ -1,6 +1,7 @@
 import { REGION_LABELS } from "../../adapters/ui/regionPresentation";
 import { GARMENT_COLOR_LABELS } from "../../adapters/ui/garmentColorPresentation";
 import { ColorSwatches } from "../components/ColorSwatches";
+import { EditHistoryPanel } from "../components/EditHistoryPanel";
 import { EditProgressBar } from "../components/EditProgressBar";
 import { ImageUploader } from "../components/ImageUploader";
 import { OperationGallery } from "../components/OperationGallery";
@@ -33,6 +34,11 @@ export function EditorPage() {
     editBeforeUrl,
     previewUrl,
     editConfirmStatus,
+    history,
+    canUndo,
+    isUndoing,
+    undoError,
+    downloadUrl,
     upload,
     analyze,
     selectRegion,
@@ -41,6 +47,7 @@ export function EditorPage() {
     requestEdit,
     confirmEdit,
     discardEdit,
+    undoLastEdit,
   } = useEditSession();
 
   const selectedRegion = regions.find((r) => r.regionId === selectedRegionId) ?? null;
@@ -111,6 +118,25 @@ export function EditorPage() {
                   : "No regions were detected in this image."}
               </p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {image && downloadUrl && (
+        <Card>
+          <CardHeader>
+            <CardTitle>History</CardTitle>
+            <CardDescription>Edits stack on top of each other; undo goes back one.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <EditHistoryPanel
+              entries={history}
+              canUndo={canUndo}
+              isUndoing={isUndoing}
+              undoError={undoError}
+              downloadUrl={downloadUrl}
+              onUndo={undoLastEdit}
+            />
           </CardContent>
         </Card>
       )}

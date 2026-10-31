@@ -3,9 +3,11 @@ import type {
   EditGenerationResult,
   ImageApiPort,
   OperationCatalogEntry,
+  UndoResult,
 } from "../../application/ports/ImageApiPort";
 import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
+import type { EditHistory } from "../../domain/types/EditHistory";
 import type { EditOperation } from "../../domain/types/EditOperation";
 import type { EditProgress } from "../../domain/types/EditProgress";
 import type { GarmentColor } from "../../domain/types/GarmentColor";
@@ -49,6 +51,15 @@ export class FakeImageApiPort implements ImageApiPort {
 
   discardedEditIds: string[] = [];
   nextDiscardError: Error | null = null;
+
+  /** Returned by getEditHistory; tests set it to what the backend would
+   * report after their confirm/undo calls. */
+  history: EditHistory = { entries: [], canUndo: false };
+  undoneImageIds: string[] = [];
+  nextUndoResult: UndoResult | Error = {
+    revertedEditId: "fake-edit-id",
+    currentUrl: "http://example.test/static/original/fake.png",
+  };
 
   async uploadImage(file: File): Promise<UploadedImage> {
     this.uploadedFiles.push(file);
@@ -107,5 +118,19 @@ export class FakeImageApiPort implements ImageApiPort {
   async discardEdit(editId: string): Promise<void> {
     this.discardedEditIds.push(editId);
     if (this.nextDiscardError) throw this.nextDiscardError;
+  }
+
+  async getEditHistory(): Promise<EditHistory> {
+    return this.history;
+  }
+
+  async undoLastEdit(imageId: string): Promise<UndoResult> {
+    this.undoneImageIds.push(imageId);
+    if (this.nextUndoResult instanceof Error) throw this.nextUndoResult;
+    return this.nextUndoResult;
+  }
+
+  downloadUrl(imageId: string): string {
+    return `http://example.test/images/${imageId}/download`;
   }
 }
