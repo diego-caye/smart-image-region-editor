@@ -16,11 +16,13 @@ their reasoning.
 ## The app
 
 Detected regions are drawn over the photo; clicking one opens the edits
-available for it, and every edit is previewed before/after before you
-accept it. Here: Legs → "Blue jeans", on a photo where 9 regions were
-detected in one pass.
+available for it. While an edit runs, a progress bar says what it's
+actually doing (masking the region, loading the model, each sampling step).
+The result is compared in place with a before/after slider, and nothing is
+applied until you accept it. Recorded on the real app (the wait for the
+edit itself is sped up):
 
-<img src="docs/screenshots/edit-legs-jeans.png" alt="The app: region overlay, operation gallery and before/after preview for Legs → Blue jeans" width="560">
+<img src="docs/screenshots/demo.gif" alt="Demo: upload a photo, analyze it, pick Right hand → Peace sign, watch the progress stages, then drag the before/after slider" width="600">
 
 ## Examples
 
@@ -156,9 +158,16 @@ Endpoints available today:
   blue jeans/shorts).
 - `POST /images/{id}/edits` — `{region_id, operation}` → real localized
   editing (SAM2 + Qwen Image Edit via ComfyUI + composition), returns a
-  preview without touching the "official" image yet. About a minute per edit
-  with the default GPU-sharing settings (models reload each time), ~25-30s
-  with them kept loaded.
+  preview without touching the "official" image yet. Takes ~95s in Docker
+  with the default GPU-sharing settings, measured: ~20s masking with SAM2,
+  ~10s reading the instruction, ~40s loading the Qwen model, then a few
+  seconds per sampling step. Much faster with the models kept loaded.
+  Optionally send a `progress_id` (any `[A-Za-z0-9_-]{1,64}` token you
+  choose) to follow the edit while this request is still running.
+- `GET /edits/progress/{progress_id}` — the running edit's current stage
+  (`segmenting`, `reading_instruction`, `loading_model`, `generating` with
+  step/steps, `decoding`, `compositing`, `done`) and a 0-1 fraction. 404
+  until the edit reports its first stage.
 - `POST /edits/{id}/confirm` — the preview becomes the session's current
   image; the next edit is applied on top of this result, not the original.
 - `POST /edits/{id}/discard` — discards the preview, the session doesn't
@@ -235,8 +244,9 @@ eyes, body, torso, arms, legs) → overlay of selectable, colored boxes over
 the image, larger regions rendered first so smaller ones nested inside them
 (e.g. a hand inside an arm) stay clickable → click a region → visual
 operation gallery (emoji + label, never plain text) → select one →
-**Generate preview** (real SAM2 + Qwen Image Edit via ComfyUI) →
-Before/After comparison →
+**Generate preview** (real SAM2 + Qwen Image Edit via ComfyUI, with a
+progress bar showing the current stage and elapsed time) → before/after
+slider over the same photo →
 **Accept** (the session's image advances; a second edit is applied on top of
 this result, not the original — right hand→peace and left hand→thumbs-up
 coexist in the same photo) or **Discard** (no changes).
