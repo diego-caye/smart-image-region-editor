@@ -7,7 +7,9 @@
       "credit": "Vitaly Gariev on Unsplash (Unsplash License)",
       "region_type": "mouth",
       "region_box": [639, 209, 759, 238],
-      "operation": "smile_with_teeth"
+      "face_box": [615, 61, 788, 278],
+      "operation": "smile_with_teeth",
+      "min_quality_score": 0.4
     }
   ]
 }

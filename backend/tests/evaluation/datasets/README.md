@@ -29,6 +29,8 @@ Every `golden_*.json` in this directory is picked up automatically.
       // editing+compositing, not the detector. Pixel coordinates in the
       // image as downloaded (keep the URL's w= fixed so they stay valid).
       "region_box": [694, 855, 928, 1022],
+      // Optional: where the face is, to also run identity_preservation.
+      "face_box": [610, 380, 760, 560],
       "operation": "peace_sign",
       // Required exactly for operations that take one (shirt_color,
       // t_shirt, jacket, hoodie, pants_color, shorts): red, blue, green,
@@ -38,6 +40,7 @@ Every `golden_*.json` in this directory is picked up automatically.
       "pixel_tolerance": 8,          // region_preservation
       "max_changed_fraction": 0.01,  // region_preservation
       "min_quality_score": 0.5,      // edit_quality
+      "max_identity_drift": 0.03,    // identity_preservation
       "grow_px": 40,                 // default: mask_rules.mask_grow_px_for(region_type)
       "feather_px": 12
     }
@@ -70,5 +73,6 @@ runs on CPU.
   among the operations the domain allows on that region, the edited crop
   must be classified as the requested one, and more confidently than the
   original crop was.
-- **`identity_preservation`** — not implemented yet; see its module
-  docstring.
+- **`identity_preservation`** (`../evaluators/identity_preservation.py`)
+  — for entries with a `face_box`: the face mesh outside the edited area
+  keeps its shape (drift ≤ 0.03 of the inter-ocular distance).

@@ -19,7 +19,11 @@ both: the color (the caption in the requested color against the same
 caption in every other palette color) and, unless the operation only
 recolors, the garment type (as above, among the region's garments). Either
 axis alone lets a wrong edit through: a red jacket where a red hoodie was
-asked, or a blue hoodie where a red one was.
+asked, or a blue hoodie where a red one was. On the type axis only the gain
+counts, not min_score: garments layer, so on a person who keeps an open
+jacket over a new hoodie, "wearing a jacket" is still true and rightly
+takes a share (a real yellow-hoodie edit scored 0.06 -> 0.47, top caption
+"jacket").
 
 Runs on CPU on purpose — CLIP ViT-B/32 is small enough, and it keeps the
 evaluator from competing for VRAM with ComfyUI or anything else on the GPU.
@@ -118,11 +122,17 @@ def evaluate_edit_quality(
     if operation not in operations_allowed_for(region_type):
         raise ValueError(f"'{operation}' is not an operation for region '{region_type}'")
 
-    axes: list[tuple[str, list[str], str]] = []  # (name, candidates, target)
+    # (name, candidates, target, min_score)
+    axes: list[tuple[str, list[str], str, float]] = []
     if color is not None:
-        axes.append(("color", color_captions(operation), caption_for(operation, color)))
+        axes.append(
+            ("color", color_captions(operation), caption_for(operation, color), min_score)
+        )
     if operation not in _RECOLOR_ONLY:
-        axes.append(("type", candidate_captions(region_type), caption_for(operation)))
+        type_min_score = 0.0 if color is not None else min_score
+        axes.append(
+            ("type", candidate_captions(region_type), caption_for(operation), type_min_score)
+        )
 
     images = [
         Image.open(BytesIO(png)).convert("RGB")
@@ -130,8 +140,8 @@ def evaluate_edit_quality(
     ]
     score_images = scorer or clip_scorer()
     results = [
-        _score_axis(score_images, images, name, captions, target, min_score, min_gain)
-        for name, captions, target in axes
+        _score_axis(score_images, images, name, captions, target, axis_min, min_gain)
+        for name, captions, target, axis_min in axes
     ]
     weakest = min(results, key=lambda r: r.score)
     return EditQualityResult(

@@ -37,6 +37,7 @@ from app.domain.value_objects.garment_color import GarmentColor
 from app.domain.value_objects.region_type import RegionType
 from tests.evaluation.dataset_images import all_entries, ensure_image, square_crop
 from tests.evaluation.evaluators.edit_quality import evaluate_edit_quality
+from tests.evaluation.evaluators.identity_preservation import evaluate_identity_preservation
 from tests.evaluation.evaluators.region_preservation import evaluate_region_preservation
 
 pytestmark = pytest.mark.live_comfyui
@@ -104,6 +105,17 @@ def test_golden_entry(entry: dict):
         min_score=entry.get("min_quality_score", 0.5),
     )
 
+    identity = None
+    if "face_box" in entry:
+        identity = evaluate_identity_preservation(
+            image_bytes,
+            final_bytes,
+            tuple(entry["face_box"]),
+            edited_mask_png_bytes=effective_mask.getvalue(),
+            max_drift=entry.get("max_identity_drift", 0.03),
+        )
+        print(f"{entry['id']}: identity_preservation {identity.notes}")
+
     if output_dir := os.environ.get("GOLDEN_OUTPUT_DIR"):
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         (Path(output_dir) / f"{entry['id']}.png").write_bytes(final_bytes)
@@ -118,4 +130,6 @@ def test_golden_entry(entry: dict):
         )
     if not quality.passed:
         problems.append(f"edit_quality: {quality.notes}")
+    if identity is not None and not identity.passed:
+        problems.append(f"identity_preservation: {identity.notes}")
     assert not problems, f"'{entry['id']}' failed — " + "; ".join(problems)

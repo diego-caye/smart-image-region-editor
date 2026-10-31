@@ -152,3 +152,24 @@ def test_rejects_an_operation_that_does_not_belong_to_the_region():
         evaluate_edit_quality(
             _png("gray"), _png("gray"), RegionType.LEGS, EditOperation.PEACE_SIGN
         )
+
+
+def test_a_layered_garment_only_needs_to_gain_on_the_type_axis():
+    # a jacket kept over the new hoodie still takes its share of "type"
+    red_hoodie = caption_for(EditOperation.HOODIE, GarmentColor.RED)
+    hoodie = caption_for(EditOperation.HOODIE)
+
+    def scorer(images, captions):
+        if hoodie in captions:
+            return _fake_scorer(0.06, 0.47, hoodie)(images, captions)
+        return _fake_scorer(0.02, 0.96, red_hoodie)(images, captions)
+
+    result = evaluate_edit_quality(
+        _png("gray"),
+        _png("red"),
+        RegionType.TORSO,
+        EditOperation.HOODIE,
+        color=GarmentColor.RED,
+        scorer=scorer,
+    )
+    assert result.passed

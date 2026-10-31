@@ -6,12 +6,8 @@
       "source_url": "https://images.unsplash.com/photo-1581382575646-a4d90bb53a4a?fm=jpg&q=80&w=1200&fit=crop",
       "credit": "Mitchell Luo on Unsplash (Unsplash License)",
       "region_type": "torso",
-      "region_box": [
-        380,
-        398,
-        790,
-        998
-      ],
+      "region_box": [380, 398, 790, 998],
+      "face_box": [507, 186, 631, 349],
       "operation": "shirt_color",
       "color": "red"
     },
@@ -21,12 +17,8 @@
       "source_url": "https://images.unsplash.com/photo-1581382575646-a4d90bb53a4a?fm=jpg&q=80&w=1200&fit=crop",
       "credit": "Mitchell Luo on Unsplash (Unsplash License)",
       "region_type": "torso",
-      "region_box": [
-        380,
-        398,
-        790,
-        998
-      ],
+      "region_box": [380, 398, 790, 998],
+      "face_box": [507, 186, 631, 349],
       "operation": "hoodie",
       "color": "yellow"
     },
@@ -36,12 +28,8 @@
       "source_url": "https://images.unsplash.com/photo-1581382575646-a4d90bb53a4a?fm=jpg&q=80&w=1200&fit=crop",
       "credit": "Mitchell Luo on Unsplash (Unsplash License)",
       "region_type": "legs",
-      "region_box": [
-        384,
-        796,
-        869,
-        1800
-      ],
+      "region_box": [384, 796, 869, 1800],
+      "face_box": [507, 186, 631, 349],
       "operation": "blue_jeans"
     },
     {
@@ -50,12 +38,8 @@
       "source_url": "https://images.unsplash.com/photo-1581382575646-a4d90bb53a4a?fm=jpg&q=80&w=1200&fit=crop",
       "credit": "Mitchell Luo on Unsplash (Unsplash License)",
       "region_type": "legs",
-      "region_box": [
-        384,
-        796,
-        869,
-        1800
-      ],
+      "region_box": [384, 796, 869, 1800],
+      "face_box": [507, 186, 631, 349],
       "operation": "pants_color",
       "color": "green"
     },
@@ -65,12 +49,8 @@
       "source_url": "https://images.unsplash.com/photo-1758600432307-2f5ea934be75?fm=jpg&q=80&w=1200&fit=crop",
       "credit": "Vitaly Gariev on Unsplash (Unsplash License)",
       "region_type": "right_arm",
-      "region_box": [
-        205,
-        193,
-        611,
-        621
-      ],
+      "region_box": [205, 193, 611, 621],
+      "face_box": [615, 61, 788, 278],
       "operation": "wristwatch"
     }
   ]

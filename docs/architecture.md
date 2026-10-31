@@ -518,8 +518,34 @@ real emoji → click an operation → confirmation card).
     (`-m live_models`) checks the real model recognizes an unedited waving
     hand as "wave".
 
-  `identity_preservation.py` is still a documented stub that deliberately
-  fails with `NotImplementedError` (tested in `test_stub_evaluators.py`).
+  `identity_preservation.py` compares MediaPipe's 478-point face mesh on
+  the original and the final image, on the same crop around the face.
+  Landmarks where the blend mask is at 50% or more (in either image) are
+  dropped — a smile is supposed to move the mouth — the rest are aligned with a similarity
+  transform (Procrustes), and the RMS residual over the original's
+  inter-ocular distance is the drift. It is a shape check, not a
+  recognition one: face-recognition embeddings would also catch appearance
+  changes, but the usual pretrained weights (insightface's packs, for
+  example) are non-commercial, while MediaPipe and its model are Apache
+  2.0 and already a backend dependency. Calibrated on real images, with
+  the real blend masks, before picking the 0.03 threshold:
+
+  | Case | drift |
+  |---|---|
+  | Garment, hand and arm edits (face untouched) | 0.0000–0.0010 |
+  | Mouth → Smile with teeth (two runs) | 0.0083–0.0123 |
+  | Eyes → Sunglasses (two runs) | 0.0163–0.0165 |
+  | Same photo, JPEG q70 / Gaussian blur 1.5 | 0.0030–0.0082 |
+  | Another person's face pasted over the face | 0.0466–0.0503 |
+
+  The 50% cut matters: counting every pixel the mask touches, the mouth
+  edit's 40px grow plus feathering left 19 of 478 landmarks, too few to
+  say anything; at 50% it's 117.
+
+  The geometry is unit-tested with a fake landmark finder
+  (`test_identity_preservation_evaluator.py`): no drift for a moved,
+  scaled or tilted copy, drift for a reshaped one, masked landmarks
+  ignored, a face lost in the edit failing.
   `test_golden_dataset.py` (opt-in, `pytest -m live_comfyui`) runs every
   entry in `datasets/golden_*.json` through the real pipeline and checks
   both evaluators. The bundled entries point at Unsplash-licensed photos
@@ -556,15 +582,22 @@ real emoji → click an operation → confirmation card).
   without this container, someone without ComfyUI already installed would
   have to set up the whole Qwen Image Edit pipeline by hand.
 
-  **Sharing the GPU**: by default ComfyUI runs with
-  `--disable-smart-memory --reserve-vram 4` (`COMFYUI_EXTRA_ARGS`, both
-  real flags from ComfyUI's own `cli_args.py`): it offloads models to RAM
-  after each edit instead of holding VRAM while idle, and keeps 4GB free
-  for other software. It was developed on a machine running several other
+  **Sharing the GPU**: it was developed on a machine running several other
   GPU containers (TTS, LLMs, another ComfyUI), where an idle ComfyUI
-  holding ~14GB of VRAM would starve them. The cost is slower edits, since
-  the models reload each time; set `COMFYUI_EXTRA_ARGS=` (empty) when
-  nothing else uses the GPU.
+  holding ~14GB of VRAM would starve them — but reloading the models on
+  every edit made each one take ~93s. The middle ground: keep them loaded
+  while the user is editing, release them once they stop.
+  `infrastructure/idle_release.py`'s `IdleReleaser` restarts a timer on
+  every use; when `MODELS_IDLE_UNLOAD_SECONDS` (default 180) pass without
+  one, the backend drops its SAM2 predictor and asks ComfyUI to unload
+  through its real `POST /free` endpoint (`unload_models` +
+  `free_memory`). Measured: 93.2s for the first edit, 24.4s and 26.5s for
+  the next two, VRAM ~13GB while editing and back to the 2.4GB baseline
+  after the timer. A release still pending when the process exits runs
+  then — a golden-dataset run that ended before its timer fired once left
+  ComfyUI holding 11.7GB with nobody left to free it. ComfyUI also runs
+  with `--reserve-vram 4` (`COMFYUI_EXTRA_ARGS`) to keep 4GB free for
+  other software.
 
   **Resumable model download**: `download_models.sh` uses `curl -C -`, so
   a container restart halfway through the ~31GB first-start download picks
@@ -645,10 +678,12 @@ differs):
 1. **Whole-body and face operations**: BODY and FACE are detected but still
    have no operations — a whole-body or whole-face edit is a much larger,
    riskier change than a gesture or a garment (identity drift, pose
-   changes), so it waits until `identity_preservation` exists to catch it.
-2. **`identity_preservation`**: still a stub. The natural tool is a face
-   embedding model, but the common pretrained ones (e.g. insightface's)
-   carry non-commercial licenses, which is why it wasn't just dropped in.
+   changes). `identity_preservation` now exists to catch shape drift, but
+   a whole-face edit would mask out most of the mesh it compares, so it
+   would need an appearance check too.
+2. **Appearance-level identity check**: `identity_preservation` compares
+   face shape only. A face-recognition embedding with a license that
+   allows commercial use would let it compare appearance as well.
 3. **Grow the golden dataset**: it currently has one case per kind of edit
    (gesture, expression, garment, legs, accessory) on two photos. More
    varied photos (lighting, skin tones, poses, occlusions) would make it a

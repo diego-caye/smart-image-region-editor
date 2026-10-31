@@ -6,12 +6,8 @@
       "source_url": "https://images.unsplash.com/photo-1758600432307-2f5ea934be75?fm=jpg&q=80&w=1200&fit=crop",
       "credit": "Vitaly Gariev on Unsplash (Unsplash License)",
       "region_type": "right_hand",
-      "region_box": [
-        171,
-        167,
-        384,
-        402
-      ],
+      "region_box": [171, 167, 384, 402],
+      "face_box": [615, 61, 788, 278],
       "operation": "peace_sign"
     },
     {
@@ -20,12 +16,8 @@
       "source_url": "https://images.unsplash.com/photo-1758600432307-2f5ea934be75?fm=jpg&q=80&w=1200&fit=crop",
       "credit": "Vitaly Gariev on Unsplash (Unsplash License)",
       "region_type": "right_hand",
-      "region_box": [
-        171,
-        167,
-        384,
-        402
-      ],
+      "region_box": [171, 167, 384, 402],
+      "face_box": [615, 61, 788, 278],
       "operation": "gloves"
     }
   ]

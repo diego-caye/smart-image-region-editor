@@ -105,7 +105,7 @@ rejects a color on an operation that takes none, or a garment without one.
 | 3b | Frontend: selectable region overlay + visual operation gallery (shadcn/ui) | ✅ |
 | 4 | Visual operation catalog | ✅ |
 | 5 | Localized editing via ComfyUI + composition, end-to-end (backend + frontend) | ✅ |
-| 6 | Golden dataset / evaluation | ✅ `region_preservation` + CLIP-based `edit_quality`, 5/5 bundled cases pass with real Qwen edits · `identity_preservation` is a documented stub |
+| 6 | Golden dataset / evaluation | ✅ `region_preservation` + CLIP-based `edit_quality` + face-mesh `identity_preservation` over 9 bundled cases, run on real Qwen edits |
 | — | Docker deployment (backend + frontend, GPU) | ✅ |
 | — | Extend to mouth/eyes/torso/arms/legs | ✅ expressions, garments (shirt, jacket, jeans, shorts) and accessories (watch, bracelet) are editable · face and whole-body are detection-only |
 | — | Containerized ComfyUI (self-contained repo, no native install required) | ✅ shares the GPU politely by default; model download resumes if interrupted |
@@ -174,10 +174,10 @@ Endpoints available today:
   empty list for most).
 - `POST /images/{id}/edits` — `{region_id, operation, color?}` → real localized
   editing (SAM2 + Qwen Image Edit via ComfyUI + composition), returns a
-  preview without touching the "official" image yet. Takes ~95s in Docker
-  with the default GPU-sharing settings, measured: ~20s masking with SAM2,
-  ~10s reading the instruction, ~40s loading the Qwen model, then a few
-  seconds per sampling step. Much faster with the models kept loaded.
+  preview without touching the "official" image yet. Measured in Docker:
+  ~93s for the first edit (~20s loading SAM2 and masking, ~10s reading the
+  instruction, ~40s loading the Qwen model, then a few seconds per
+  sampling step), ~25s for the next ones while the models stay loaded.
   Optionally send a `progress_id` (any `[A-Za-z0-9_-]{1,64}` token you
   choose) to follow the edit while this request is still running.
 - `GET /edits/progress/{progress_id}` — the running edit's current stage
@@ -209,8 +209,14 @@ Endpoints available today:
   happened: zero-shot CLIP (`openai/clip-vit-base-patch32`, on CPU) must
   classify the edited region as the requested operation, and more
   confidently than the original.
-- `evaluators/identity_preservation.py` — documented stub, not implemented
-  yet.
+- `evaluators/identity_preservation.py` — did the face keep its shape?
+  MediaPipe's face mesh on the original and the final image, compared only
+  outside the edited area, after aligning for position/scale/rotation. It
+  measures geometry, not appearance: face-recognition embeddings would
+  catch more, but the usual pretrained ones are non-commercial. Calibrated
+  on real images: edits stay at or below 0.017 (sunglasses, the most
+  occluding), JPEG/blur noise below 0.01, another person's face pasted in
+  at 0.047–0.050; the threshold is 0.03.
 - `datasets/golden_*_edits.json` — one case per kind of edit (gesture,
   gloves, expression, sunglasses, shirt color, hoodie, jeans, pants color,
   wristwatch) on Unsplash-licensed photos, which are downloaded on first
@@ -225,23 +231,34 @@ Endpoints available today:
   catch everything (see below). See `datasets/README.md` to add your own
   photos.
 
-Latest results, all 9 passing. The score is the probability CLIP gives the
-requested operation, among the ones allowed on that region, before → after.
-Colored garments are scored twice — the color against every other palette
-color, and (unless the operation only recolors) the garment type — and the
-weaker of the two is shown:
+Latest run on real Qwen edits: 8 of 9 passed as run, and the ninth (the
+hoodie, which prompted the layered-garment fix below) passes when its saved
+output is re-scored with that fix. edit_quality is the
+probability CLIP gives the requested operation among the ones allowed on
+that region, before → after. Colored garments are scored twice — the color
+against every other palette color, and (unless the operation only
+recolors) the garment type — and the weaker of the two is shown.
+identity_preservation is the face-mesh drift outside the edited area
+(threshold 0.03):
 
-| Case | edit_quality (CLIP) |
-|---|---|
-| Right hand → Peace sign | 0.17 → 0.92 |
-| Right hand → Gloves | 0.11 → 0.99 |
-| Mouth → Smile with teeth | 0.30 → 0.69 |
-| Eyes → Sunglasses | 0.00 → 0.84 |
-| Right arm → Wristwatch | 0.64 → 0.90 |
-| Torso → Shirt color · Red | 0.02 → 0.85 |
-| Torso → Hoodie · Yellow | 0.06 → 0.56 (color: 0.02 → 0.97) |
-| Legs → Blue jeans | 0.38 → 0.97 |
-| Legs → Pants color · Green | 0.02 → 0.96 |
+| Case | edit_quality (CLIP) | identity drift |
+|---|---|---|
+| Right hand → Peace sign | 0.17 → 0.93 | 0.0000 |
+| Right hand → Gloves | 0.11 → 0.99 | 0.0000 |
+| Mouth → Smile with teeth | 0.30 → 0.77 | 0.0076 |
+| Eyes → Sunglasses | 0.00 → 0.80 | 0.0150 |
+| Right arm → Wristwatch | 0.64 → 0.90 | 0.0000 |
+| Torso → Shirt color · Red | 0.02 → 0.85 | 0.0003 |
+| Torso → Hoodie · Yellow | 0.06 → 0.47 (color: 0.02 → 0.96) | 0.0009 |
+| Legs → Blue jeans | 0.38 → 0.97 | 0.0000 |
+| Legs → Pants color · Green | 0.02 → 0.96 | 0.0000 |
+
+Two cases taught the evaluator something on these runs. The hoodie's
+garment-type score stays near 0.5 because the open jacket is still over it
+and "wearing a jacket" is true too, so for layered garments the type axis
+only has to gain, not win. And CLIP's score for the (visibly correct)
+toothy smile varied between 0.48 and 0.77 across three runs, so that case
+asks for 0.4 plus the usual +0.1 gain.
 
 Known limit, visible in the hoodie example: a garment that reaches past the
 region's outline (a hood rising above the collar) is cut off softly at the
@@ -308,11 +325,13 @@ containerizing it, so cloning this repo and running one command is enough.
   takes a while depending on your bandwidth, but only the first time;
   subsequent starts are instant. If the container restarts mid-download, it
   resumes where it left off.
-- ComfyUI assumes it shares the GPU with other software by default: it
-  offloads its models after each edit and keeps 4GB of VRAM free
-  (`COMFYUI_EXTRA_ARGS` in `docker-compose.yml`). That makes each edit
-  slower since the models reload every time; if nothing else uses your GPU,
-  set `COMFYUI_EXTRA_ARGS=` (empty) in `.env` to keep them loaded.
+- The GPU is shared politely by default: SAM2 and Qwen stay loaded while
+  you edit (back-to-back edits take ~25s instead of ~93s) and are released
+  after `MODELS_IDLE_UNLOAD_SECONDS` (default 180) without an edit;
+  measured, VRAM goes from ~13GB while editing back to the idle baseline.
+  ComfyUI also keeps 4GB free for other software (`COMFYUI_EXTRA_ARGS`).
+  Set `MODELS_IDLE_UNLOAD_SECONDS=0` to free everything after each edit,
+  or a large value if nothing else uses your GPU.
 - The backend runs with GPU access (`deploy.resources.reservations` in
   `docker-compose.yml`) for SAM2; ComfyUI also requests it for Qwen Image
   Edit. If your machine doesn't have Docker's `nvidia` runtime configured,

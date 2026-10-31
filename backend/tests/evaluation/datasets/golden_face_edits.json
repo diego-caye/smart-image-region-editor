@@ -6,12 +6,8 @@
       "source_url": "https://images.unsplash.com/photo-1758600432307-2f5ea934be75?fm=jpg&q=80&w=1200&fit=crop",
       "credit": "Vitaly Gariev on Unsplash (Unsplash License)",
       "region_type": "eyes",
-      "region_box": [
-        596,
-        140,
-        807,
-        159
-      ],
+      "region_box": [596, 140, 807, 159],
+      "face_box": [615, 61, 788, 278],
       "operation": "sunglasses"
     }
   ]
