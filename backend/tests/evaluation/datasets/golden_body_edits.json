@@ -6,8 +6,29 @@
       "source_url": "https://images.unsplash.com/photo-1581382575646-a4d90bb53a4a?fm=jpg&q=80&w=1200&fit=crop",
       "credit": "Mitchell Luo on Unsplash (Unsplash License)",
       "region_type": "torso",
-      "region_box": [380, 398, 790, 998],
-      "operation": "red_shirt"
+      "region_box": [
+        380,
+        398,
+        790,
+        998
+      ],
+      "operation": "shirt_color",
+      "color": "red"
+    },
+    {
+      "id": "suit-man-torso-yellow-hoodie",
+      "image_path": "images/unsplash-suit-man.jpg",
+      "source_url": "https://images.unsplash.com/photo-1581382575646-a4d90bb53a4a?fm=jpg&q=80&w=1200&fit=crop",
+      "credit": "Mitchell Luo on Unsplash (Unsplash License)",
+      "region_type": "torso",
+      "region_box": [
+        380,
+        398,
+        790,
+        998
+      ],
+      "operation": "hoodie",
+      "color": "yellow"
     },
     {
       "id": "suit-man-legs-blue-jeans",
@@ -15,8 +36,28 @@
       "source_url": "https://images.unsplash.com/photo-1581382575646-a4d90bb53a4a?fm=jpg&q=80&w=1200&fit=crop",
       "credit": "Mitchell Luo on Unsplash (Unsplash License)",
       "region_type": "legs",
-      "region_box": [384, 796, 869, 1800],
+      "region_box": [
+        384,
+        796,
+        869,
+        1800
+      ],
       "operation": "blue_jeans"
+    },
+    {
+      "id": "suit-man-legs-green-pants",
+      "image_path": "images/unsplash-suit-man.jpg",
+      "source_url": "https://images.unsplash.com/photo-1581382575646-a4d90bb53a4a?fm=jpg&q=80&w=1200&fit=crop",
+      "credit": "Mitchell Luo on Unsplash (Unsplash License)",
+      "region_type": "legs",
+      "region_box": [
+        384,
+        796,
+        869,
+        1800
+      ],
+      "operation": "pants_color",
+      "color": "green"
     },
     {
       "id": "waving-man-right-arm-wristwatch",
@@ -24,7 +65,12 @@
       "source_url": "https://images.unsplash.com/photo-1758600432307-2f5ea934be75?fm=jpg&q=80&w=1200&fit=crop",
       "credit": "Vitaly Gariev on Unsplash (Unsplash License)",
       "region_type": "right_arm",
-      "region_box": [205, 193, 611, 621],
+      "region_box": [
+        205,
+        193,
+        611,
+        621
+      ],
       "operation": "wristwatch"
     }
   ]

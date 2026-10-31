@@ -33,6 +33,7 @@ from app.domain.entities.region import DetectedRegion
 from app.domain.services.mask_rules import mask_grow_px_for
 from app.domain.value_objects.bounding_box import BoundingBox
 from app.domain.value_objects.edit_operation import EditOperation
+from app.domain.value_objects.garment_color import GarmentColor
 from app.domain.value_objects.region_type import RegionType
 from tests.evaluation.dataset_images import all_entries, ensure_image, square_crop
 from tests.evaluation.evaluators.edit_quality import evaluate_edit_quality
@@ -56,6 +57,7 @@ def test_golden_entry(entry: dict):
         confidence=1.0,
     )
     operation = EditOperation(entry["operation"])
+    color = GarmentColor(entry["color"]) if "color" in entry else None
 
     segmentation = get_image_segmenter().segment(image_bytes, region)
     editor_result = get_image_editor().edit(
@@ -63,6 +65,7 @@ def test_golden_entry(entry: dict):
         mask_png_bytes=segmentation.mask_png_bytes,
         region_box=region.bounding_box,
         operation=operation,
+        color=color,
     )
     grow_px = entry.get("grow_px", mask_grow_px_for(region_type))
     feather_px = entry.get("feather_px", 12)
@@ -97,6 +100,7 @@ def test_golden_entry(entry: dict):
         square_crop(final_bytes, region.bounding_box),
         region_type,
         operation,
+        color=color,
         min_score=entry.get("min_quality_score", 0.5),
     )
 

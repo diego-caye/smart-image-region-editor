@@ -84,6 +84,14 @@ def test_list_operations_for_right_hand():
     assert "peace_sign" in operations
     peace_sign = next(op for op in body["operations"] if op["operation"] == "peace_sign")
     assert peace_sign["emoji"] == "✌️"
+    assert peace_sign["colors"] == []
+
+
+def test_garments_list_the_palette_to_pick_a_color_from():
+    client = TestClient(app)
+    body = client.get("/regions/torso/operations").json()
+    hoodie = next(op for op in body["operations"] if op["operation"] == "hoodie")
+    assert hoodie["colors"] == ["red", "blue", "green", "yellow", "black", "white", "gray"]
 
 
 def test_list_operations_rejects_unknown_region_type():

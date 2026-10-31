@@ -2,12 +2,15 @@ import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
 import type { EditOperation } from "../../domain/types/EditOperation";
 import type { EditProgress } from "../../domain/types/EditProgress";
+import type { GarmentColor } from "../../domain/types/GarmentColor";
 import type { RegionType } from "../../domain/types/RegionType";
 
 export interface OperationCatalogEntry {
   operation: EditOperation;
   label: string;
   emoji: string;
+  /** The palette to pick from; empty when the operation takes no color. */
+  colors: GarmentColor[];
 }
 
 export interface EditGenerationResult {
@@ -34,11 +37,13 @@ export interface ImageApiPort {
   listOperationsForRegion(regionType: RegionType): Promise<OperationCatalogEntry[]>;
   /** onProgress, if given, is called with the edit's progress while the
    * returned promise is still pending — an edit takes on the order of a
-   * minute. */
+   * minute. color must be set exactly when the operation's catalog entry
+   * lists colors. */
   requestEdit(
     imageId: string,
     regionId: string,
     operation: EditOperation,
+    color: GarmentColor | null,
     onProgress?: (progress: EditProgress) => void,
   ): Promise<EditGenerationResult>;
   confirmEdit(editId: string): Promise<ConfirmEditResult>;

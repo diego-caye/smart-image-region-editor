@@ -30,6 +30,7 @@ from app.application.use_cases.edit_region import (
     RegionNotFound,
 )
 from app.domain.entities.edit import InvalidEditTransition
+from app.domain.services.operation_options import InvalidOperationOptions
 from app.domain.services.region_operation_rules import OperationNotAllowedForRegion
 
 # Two routers, no shared prefix: creating an edit is scoped under the image
@@ -51,12 +52,13 @@ def create_edit(
                 image_id=image_id,
                 region_id=body.region_id,
                 operation=body.operation,
+                color=body.color,
                 progress_id=body.progress_id,
             )
         )
     except (ImageNotFound, RegionNotFound, EditSessionNotFound) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except OperationNotAllowedForRegion as exc:
+    except (OperationNotAllowedForRegion, InvalidOperationOptions) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return EditRegionResponse(

@@ -30,6 +30,10 @@ Every `golden_*.json` in this directory is picked up automatically.
       // image as downloaded (keep the URL's w= fixed so they stay valid).
       "region_box": [694, 855, 928, 1022],
       "operation": "peace_sign",
+      // Required exactly for operations that take one (shirt_color,
+      // t_shirt, jacket, hoodie, pants_color, shorts): red, blue, green,
+      // yellow, black, white or gray.
+      // "color": "red",
       // All optional.
       "pixel_tolerance": 8,          // region_preservation
       "max_changed_fraction": 0.01,  // region_preservation

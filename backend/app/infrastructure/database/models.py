@@ -67,6 +67,7 @@ class EditRow(SQLModel, table=True):
     session_id: UUID = Field(index=True)
     region_id: UUID
     operation: str
+    color: str | None = None
     source_image_ref: str
     status: str
     preview_ref: str | None = None

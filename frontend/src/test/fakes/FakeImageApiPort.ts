@@ -8,6 +8,7 @@ import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
 import type { EditOperation } from "../../domain/types/EditOperation";
 import type { EditProgress } from "../../domain/types/EditProgress";
+import type { GarmentColor } from "../../domain/types/GarmentColor";
 import type { RegionType } from "../../domain/types/RegionType";
 
 /** In-memory ImageApiPort double for component/hook tests — no fetch, no
@@ -27,7 +28,12 @@ export class FakeImageApiPort implements ImageApiPort {
 
   operationsByRegion: Partial<Record<RegionType, OperationCatalogEntry[]>> = {};
 
-  requestedEdits: { imageId: string; regionId: string; operation: EditOperation }[] = [];
+  requestedEdits: {
+    imageId: string;
+    regionId: string;
+    operation: EditOperation;
+    color: GarmentColor | null;
+  }[] = [];
   nextEditResult: EditGenerationResult | Error = {
     editId: "fake-edit-id",
     status: "preview_ready",
@@ -78,9 +84,10 @@ export class FakeImageApiPort implements ImageApiPort {
     imageId: string,
     regionId: string,
     operation: EditOperation,
+    color: GarmentColor | null,
     onProgress?: (progress: EditProgress) => void,
   ): Promise<EditGenerationResult> {
-    this.requestedEdits.push({ imageId, regionId, operation });
+    this.requestedEdits.push({ imageId, regionId, operation, color });
     this.onProgress = onProgress ?? null;
     if (this.holdEdits) {
       await new Promise<void>((resolve) => {

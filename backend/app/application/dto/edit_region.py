@@ -5,6 +5,7 @@ from uuid import UUID
 
 from app.domain.entities.edit import EditStatus
 from app.domain.value_objects.edit_operation import EditOperation
+from app.domain.value_objects.garment_color import GarmentColor
 
 
 @dataclass(slots=True)
@@ -12,6 +13,7 @@ class EditRegionRequest:
     image_id: UUID
     region_id: UUID
     operation: EditOperation
+    color: GarmentColor | None = None
     progress_id: str | None = None  # see EditProgressTracker
 
 

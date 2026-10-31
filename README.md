@@ -43,11 +43,21 @@ arm.
 
 <img src="docs/screenshots/examples/wristwatch.png" alt="Right arm → Wristwatch, before/after" width="760">
 
-**Garments** — Torso → Red shirt changes only the T-shirt under the open
-jacket; Legs → Blue jeans changes only the pants, keeping the hands in the
-pockets and the sneakers.
+**Garments** — Torso → Shirt color · Red changes only the T-shirt under
+the open jacket; Legs → Blue jeans changes only the pants, keeping the
+hands in the pockets and the sneakers.
 
-<img src="docs/screenshots/examples/red-shirt.png" alt="Torso → Red shirt, before/after" width="380"> <img src="docs/screenshots/examples/blue-jeans.png" alt="Legs → Blue jeans, before/after" width="380">
+<img src="docs/screenshots/examples/red-shirt.png" alt="Torso → Shirt color · Red, before/after" width="380"> <img src="docs/screenshots/examples/blue-jeans.png" alt="Legs → Blue jeans, before/after" width="380">
+
+**Garments in any color** — pick a swatch: Torso → Hoodie · Yellow puts a
+hoodie under the same jacket; Legs → Pants color · Green.
+
+<img src="docs/screenshots/examples/yellow-hoodie.png" alt="Torso → Hoodie · Yellow, before/after" width="380"> <img src="docs/screenshots/examples/green-pants.png" alt="Legs → Pants color · Green, before/after" width="380">
+
+**Quick accessories** — Eyes → Sunglasses; Right hand → Gloves, keeping
+the gesture.
+
+<img src="docs/screenshots/examples/sunglasses.png" alt="Eyes → Sunglasses, before/after" width="420"> <img src="docs/screenshots/examples/gloves.png" alt="Right hand → Gloves, before/after" width="380">
 
 <sub>Demo photos from Unsplash, used under the
 [Unsplash License](https://unsplash.com/license): waving man by Vitaly
@@ -57,13 +67,18 @@ Gariev, full-body portrait by Mitchell Luo.</sub>
 
 | Region | Detected by | Edits |
 |---|---|---|
-| Left / right hand | YOLOv8 | 👋 Wave · ✌️ Peace sign · 👍 Thumbs up · ✊ Fist |
+| Left / right hand | YOLOv8 | 👋 Wave · ✌️ Peace sign · 👍 Thumbs up · ✊ Fist · 🧤 Gloves |
 | Mouth | MediaPipe FaceLandmarker | 🙂 Smile · 😁 Smile with teeth · 😐 Closed mouth |
-| Eyes | MediaPipe FaceLandmarker | 👀 Open eyes · 😌 Closed eyes |
-| Torso | MediaPipe PoseLandmarker | 👔 Red shirt · 🧥 Black jacket · 👕 White T-shirt |
+| Eyes | MediaPipe FaceLandmarker | 👀 Open eyes · 😌 Closed eyes · 🕶️ Sunglasses |
+| Torso | MediaPipe PoseLandmarker | 👔 Shirt color* · 👕 T-shirt* · 🧥 Jacket* · 👚 Hoodie* |
 | Left / right arm | MediaPipe PoseLandmarker | ⌚ Wristwatch · 📿 Bracelet |
-| Legs | MediaPipe PoseLandmarker | 👖 Blue jeans · 🩳 Shorts |
+| Legs | MediaPipe PoseLandmarker | 👖 Blue jeans · 🎨 Pants color* · 🩳 Shorts* |
 | Face, whole body | YOLOv8 / PoseLandmarker | detected and shown, not editable yet |
+
+\* Pick a color from swatches: red, blue, green, yellow, black, white or
+gray. Still no typing: the palette comes from the operation catalog
+(`GET /regions/{type}/operations` lists it per operation), and the backend
+rejects a color on an operation that takes none, or a garment without one.
 
 ## How it works
 
@@ -188,8 +203,9 @@ Endpoints available today:
 - `evaluators/identity_preservation.py` — documented stub, not implemented
   yet.
 - `datasets/golden_*_edits.json` — one case per kind of edit (gesture,
-  expression, shirt, jeans, wristwatch) on Unsplash-licensed photos, which
-  are downloaded on first run and never committed. Run them with:
+  gloves, expression, sunglasses, shirt color, hoodie, jeans, pants color,
+  wristwatch) on Unsplash-licensed photos, which are downloaded on first
+  run and never committed. Run them with:
 
   ```powershell
   ./.venv/Scripts/pip install -e ".[eval]"
@@ -200,16 +216,27 @@ Endpoints available today:
   catch everything (see below). See `datasets/README.md` to add your own
   photos.
 
-Latest results, all 5 passing. The score is the probability CLIP gives the
-requested operation, among the ones allowed on that region, before → after:
+Latest results, all 9 passing. The score is the probability CLIP gives the
+requested operation, among the ones allowed on that region, before → after.
+Colored garments are scored twice — the color against every other palette
+color, and (unless the operation only recolors) the garment type — and the
+weaker of the two is shown:
 
 | Case | edit_quality (CLIP) |
 |---|---|
-| Right hand → Peace sign | 0.19 → 0.93 |
-| Mouth → Smile with teeth | 0.30 → 0.74 |
+| Right hand → Peace sign | 0.17 → 0.92 |
+| Right hand → Gloves | 0.11 → 0.99 |
+| Mouth → Smile with teeth | 0.30 → 0.69 |
+| Eyes → Sunglasses | 0.00 → 0.84 |
 | Right arm → Wristwatch | 0.64 → 0.90 |
-| Torso → Red shirt | 0.03 → 0.98 |
-| Legs → Blue jeans | 0.38 → 0.98 |
+| Torso → Shirt color · Red | 0.02 → 0.85 |
+| Torso → Hoodie · Yellow | 0.06 → 0.56 (color: 0.02 → 0.97) |
+| Legs → Blue jeans | 0.38 → 0.97 |
+| Legs → Pants color · Green | 0.02 → 0.96 |
+
+Known limit, visible in the hoodie example: a garment that reaches past the
+region's outline (a hood rising above the collar) is cut off softly at the
+mask's feathered edge.
 
 The first real run is what found three bugs: the preservation check was
 measuring against the raw mask instead of the one the compositor actually

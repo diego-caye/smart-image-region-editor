@@ -42,9 +42,9 @@ def test_face_and_whole_body_have_no_operations_yet():
 
 
 def test_garments_go_on_the_region_they_cover():
-    assert is_operation_allowed(RegionType.TORSO, EditOperation.RED_SHIRT)
+    assert is_operation_allowed(RegionType.TORSO, EditOperation.SHIRT_COLOR)
     assert is_operation_allowed(RegionType.LEGS, EditOperation.BLUE_JEANS)
-    assert not is_operation_allowed(RegionType.LEGS, EditOperation.RED_SHIRT)
+    assert not is_operation_allowed(RegionType.LEGS, EditOperation.SHIRT_COLOR)
     assert not is_operation_allowed(RegionType.TORSO, EditOperation.BLUE_JEANS)
 
 
@@ -57,3 +57,10 @@ def test_accessories_allowed_on_either_arm_but_not_torso():
 def test_every_operation_is_reachable_from_some_region():
     reachable = set().union(*(operations_allowed_for(r) for r in RegionType))
     assert reachable == set(EditOperation)
+
+
+def test_new_cheap_operations_go_where_they_are_worn():
+    assert is_operation_allowed(RegionType.EYES, EditOperation.SUNGLASSES)
+    assert is_operation_allowed(RegionType.TORSO, EditOperation.HOODIE)
+    assert is_operation_allowed(RegionType.LEFT_HAND, EditOperation.GLOVES)
+    assert not is_operation_allowed(RegionType.MOUTH, EditOperation.SUNGLASSES)

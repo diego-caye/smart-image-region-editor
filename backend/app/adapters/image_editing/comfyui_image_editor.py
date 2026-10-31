@@ -19,6 +19,7 @@ from PIL import Image as PILImage
 from app.domain.ports.image_editor import EditorProgress, EditorStage, EditResult, ImageEditor
 from app.domain.value_objects.bounding_box import BoundingBox
 from app.domain.value_objects.edit_operation import EditOperation
+from app.domain.value_objects.garment_color import GarmentColor
 from app.infrastructure.image_editing.comfyui.client import ComfyUIClient, NodeEvent
 from app.infrastructure.image_editing.comfyui.operation_prompts import prompt_for
 from app.infrastructure.image_editing.comfyui.workflow import (
@@ -67,6 +68,7 @@ class ComfyUIImageEditor(ImageEditor):
         mask_png_bytes: bytes,
         region_box: BoundingBox,
         operation: EditOperation,
+        color: GarmentColor | None = None,
         reference_image_png_bytes: bytes | None = None,
         on_progress: Callable[[EditorProgress], None] | None = None,
     ) -> EditResult:
@@ -85,7 +87,7 @@ class ComfyUIImageEditor(ImageEditor):
         )
 
         seed = random.randint(0, 2**32 - 1)
-        prompt_text = prompt_for(operation)
+        prompt_text = prompt_for(operation, color)
         prompt_graph = build_qwen_edit_prompt(
             QwenEditParams(
                 image_filename=uploaded_filename,
@@ -128,6 +130,7 @@ class ComfyUIImageEditor(ImageEditor):
                 "steps": self._steps,
                 "cfg": self._cfg,
                 "prompt": prompt_text,
+                "color": color.value if color else None,
             },
         )
 

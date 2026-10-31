@@ -9,9 +9,11 @@ from app.application.use_cases.edit_region import EditRegionUseCase
 from app.application.use_cases.upload_image import UploadImageUseCase
 from app.domain.entities.edit import EditStatus
 from app.domain.entities.region import DetectedRegion
+from app.domain.services.operation_options import InvalidOperationOptions
 from app.domain.services.region_operation_rules import OperationNotAllowedForRegion
 from app.domain.value_objects.bounding_box import BoundingBox
 from app.domain.value_objects.edit_operation import EditOperation
+from app.domain.value_objects.garment_color import GarmentColor
 from app.domain.value_objects.region_type import RegionType
 from tests.unit.application.fakes import (
     FakeImageCompositor,
@@ -190,15 +192,15 @@ def test_mask_is_only_segmented_once_and_then_reused():
 
 
 @pytest.mark.parametrize(
-    ("region_type", "operation", "expected_grow_px"),
+    ("region_type", "operation", "color", "expected_grow_px"),
     [
         # a gesture can reach past the original outline...
-        (RegionType.RIGHT_HAND, EditOperation.PEACE_SIGN, 40),
+        (RegionType.RIGHT_HAND, EditOperation.PEACE_SIGN, None, 40),
         # ...a garment can't, so its margin stays tight
-        (RegionType.TORSO, EditOperation.RED_SHIRT, 16),
+        (RegionType.TORSO, EditOperation.SHIRT_COLOR, GarmentColor.RED, 16),
     ],
 )
-def test_mask_grow_depends_on_the_region_type(region_type, operation, expected_grow_px):
+def test_mask_grow_depends_on_the_region_type(region_type, operation, color, expected_grow_px):
     storage = FakeImageStorage()
     repo = FakeImageRepository()
     uploaded, region = _setup_image_with_region(storage, repo, region_type=region_type)
@@ -213,7 +215,9 @@ def test_mask_grow_depends_on_the_region_type(region_type, operation, expected_g
     EditRegionUseCase(
         repo, storage, FakeImageSegmenter(), FakeImageEditor(), RecordingCompositor()
     ).execute(
-        EditRegionRequest(image_id=uploaded.image_id, region_id=region.id, operation=operation)
+        EditRegionRequest(
+            image_id=uploaded.image_id, region_id=region.id, operation=operation, color=color
+        )
     )
 
     assert grow_px_seen == [expected_grow_px]
@@ -274,3 +278,40 @@ def test_without_a_progress_id_nothing_is_reported():
     )
 
     assert tracker.reports == []
+
+
+def test_the_chosen_color_reaches_the_editor_and_is_kept_on_the_edit():
+    storage = FakeImageStorage()
+    repo = FakeImageRepository()
+    uploaded, region = _setup_image_with_region(storage, repo, region_type=RegionType.TORSO)
+
+    result = EditRegionUseCase(
+        repo, storage, FakeImageSegmenter(), FakeImageEditor(), FakeImageCompositor()
+    ).execute(
+        EditRegionRequest(
+            image_id=uploaded.image_id,
+            region_id=region.id,
+            operation=EditOperation.HOODIE,
+            color=GarmentColor.GREEN,
+        )
+    )
+
+    edit = repo.get_edit(result.edit_id)
+    assert edit.color is GarmentColor.GREEN
+    assert edit.model_metadata["color"] is GarmentColor.GREEN
+
+
+def test_a_garment_without_its_color_is_rejected_before_anything_runs():
+    storage = FakeImageStorage()
+    repo = FakeImageRepository()
+    uploaded, region = _setup_image_with_region(storage, repo, region_type=RegionType.TORSO)
+
+    with pytest.raises(InvalidOperationOptions):
+        EditRegionUseCase(
+            repo, storage, FakeImageSegmenter(), FakeImageEditor(), FakeImageCompositor()
+        ).execute(
+            EditRegionRequest(
+                image_id=uploaded.image_id, region_id=region.id, operation=EditOperation.HOODIE
+            )
+        )
+    assert repo.edits == {}

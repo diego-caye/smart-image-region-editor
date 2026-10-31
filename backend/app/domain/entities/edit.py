@@ -6,6 +6,7 @@ from enum import StrEnum
 from uuid import UUID, uuid4
 
 from app.domain.value_objects.edit_operation import EditOperation
+from app.domain.value_objects.garment_color import GarmentColor
 
 
 class EditStatus(StrEnum):
@@ -34,6 +35,7 @@ class Edit:
     region_id: UUID
     operation: EditOperation
     source_image_ref: str
+    color: GarmentColor | None = None  # only for garment operations
     status: EditStatus = EditStatus.PENDING
     preview_ref: str | None = None
     final_ref: str | None = None
@@ -45,7 +47,12 @@ class Edit:
 
     @staticmethod
     def new(
-        *, session_id: UUID, region_id: UUID, operation: EditOperation, source_image_ref: str
+        *,
+        session_id: UUID,
+        region_id: UUID,
+        operation: EditOperation,
+        source_image_ref: str,
+        color: GarmentColor | None = None,
     ) -> Edit:
         return Edit(
             id=uuid4(),
@@ -53,6 +60,7 @@ class Edit:
             region_id=region_id,
             operation=operation,
             source_image_ref=source_image_ref,
+            color=color,
         )
 
     def mark_processing(self) -> None:

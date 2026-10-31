@@ -120,6 +120,18 @@ def test_create_edit_rejects_an_operation_invalid_for_the_region(tmp_path):
     assert response.status_code == 422
 
 
+def test_create_edit_rejects_a_color_on_an_operation_that_takes_none(tmp_path):
+    client = _client(tmp_path)
+    image_id, region_id = _upload_and_analyze(client)  # region_type is right_hand
+
+    response = client.post(
+        f"/images/{image_id}/edits",
+        json={"region_id": region_id, "operation": "peace_sign", "color": "red"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_create_edit_404s_for_an_unknown_image(tmp_path):
     client = _client(tmp_path)
     _, region_id = _upload_and_analyze(client)

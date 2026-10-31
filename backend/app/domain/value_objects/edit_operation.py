@@ -19,6 +19,9 @@ class EditOperation(StrEnum):
     THUMBS_UP = "thumbs_up"
     FIST = "fist"
 
+    # Hand accessories
+    GLOVES = "gloves"
+
     # Mouth expressions
     SMILE = "smile"
     SMILE_WITH_TEETH = "smile_with_teeth"
@@ -27,14 +30,18 @@ class EditOperation(StrEnum):
     # Eyes
     OPEN_EYES = "open_eyes"
     CLOSED_EYES = "closed_eyes"
+    SUNGLASSES = "sunglasses"
 
-    # Upper-body garments (torso)
-    RED_SHIRT = "red_shirt"
-    BLACK_JACKET = "black_jacket"
-    WHITE_TSHIRT = "white_tshirt"
+    # Upper-body garments (torso). All take a GarmentColor — see
+    # domain/services/operation_options.py.
+    SHIRT_COLOR = "shirt_color"  # recolor the shirt already worn
+    T_SHIRT = "t_shirt"
+    JACKET = "jacket"
+    HOODIE = "hoodie"
 
     # Lower-body garments (both legs)
     BLUE_JEANS = "blue_jeans"
+    PANTS_COLOR = "pants_color"  # recolor the pants already worn
     SHORTS = "shorts"
 
     # Arm accessories

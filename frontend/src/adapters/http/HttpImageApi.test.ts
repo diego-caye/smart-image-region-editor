@@ -92,7 +92,7 @@ describe("HttpImageApi", () => {
     );
 
     const api = new HttpImageApi();
-    const result = await api.requestEdit("img-1", "region-1", "peace_sign");
+    const result = await api.requestEdit("img-1", "region-1", "peace_sign", null);
 
     expect(result).toEqual({
       editId: "edit-1",
@@ -112,6 +112,17 @@ describe("HttpImageApi", () => {
     });
   });
 
+  it("requestEdit sends the color only when one is chosen", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({ edit_id: "e", status: "preview_ready", preview_url: "/p.png", error_message: null }),
+    );
+
+    await new HttpImageApi().requestEdit("img-1", "region-1", "hoodie", "green");
+
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect(JSON.parse(init?.body as string)).toMatchObject({ operation: "hoodie", color: "green" });
+  });
+
   it("requestEdit polls the edit's progress while it runs and stops once it ends", async () => {
     vi.useFakeTimers();
     let finishEdit!: (response: Response) => void;
@@ -127,7 +138,7 @@ describe("HttpImageApi", () => {
     });
 
     const reports: EditProgress[] = [];
-    const pending = new HttpImageApi().requestEdit("img-1", "region-1", "wave", (p) => reports.push(p));
+    const pending = new HttpImageApi().requestEdit("img-1", "region-1", "wave", null, (p) => reports.push(p));
     await vi.advanceTimersByTimeAsync(PROGRESS_POLL_INTERVAL_MS * 2 + 10);
 
     expect(reports).toEqual([
@@ -158,7 +169,7 @@ describe("HttpImageApi", () => {
     );
 
     const api = new HttpImageApi();
-    const result = await api.requestEdit("img-1", "region-1", "peace_sign");
+    const result = await api.requestEdit("img-1", "region-1", "peace_sign", null);
 
     expect(result).toEqual({
       editId: "edit-1",

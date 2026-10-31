@@ -215,13 +215,27 @@ one photo because the source face is already small (46×68px); that's a
 consequence of the source resolution, not a code bug — with a larger face
 in pixels, the eyes box scales proportionally.
 
-**Body-part operations**: TORSO gets red shirt / black jacket / white
-T-shirt, each arm gets wristwatch / bracelet, LEGS gets blue jeans /
-shorts. FACE and the whole-body BODY region stay detection-only: no single
-operation on them makes sense yet without a much larger, riskier edit.
-Garment prompts use their own preserve clause, since the shared one says
-"keep the clothing exactly the same" — which would contradict the
-instruction itself.
+**Body-part operations**: TORSO gets shirt color / T-shirt / jacket /
+hoodie, each arm gets wristwatch / bracelet, LEGS gets blue jeans / pants
+color / shorts; EYES also get sunglasses and hands gloves. FACE and the
+whole-body BODY region stay detection-only: no single operation on them
+makes sense yet without a much larger, riskier edit. Garment prompts use
+their own preserve clause, since the shared one says "keep the clothing
+exactly the same" — which would contradict the instruction itself.
+
+**Garment colors**: rather than one operation per color (the first version
+had RED_SHIRT, BLACK_JACKET, WHITE_TSHIRT), garments that come in colors
+take a `GarmentColor` option. Which operations take one is a domain rule
+(`domain/services/operation_options.py`), checked by the use case next to
+the region rule — a garment without a color, or a color on a peace sign,
+is a 422 before anything runs. The catalog lists the palette per
+operation, so the UI shows swatches without knowing that rule itself. The
+color is stored on the Edit; `init_db` adds the new nullable column to an
+existing database and rewrites edits made with the three old operations
+(`red_shirt` → `shirt_color` + red, and so on), so old histories still
+load. The ComfyUI prompts fill a template with a slightly more specific
+color phrase than the bare name ("royal blue", "pure white"), so the
+shade asked for is less open to interpretation.
 
 ### ComfyUI — real API (not invented)
 

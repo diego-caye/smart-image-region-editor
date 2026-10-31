@@ -1,4 +1,6 @@
 import { REGION_LABELS } from "../../adapters/ui/regionPresentation";
+import { GARMENT_COLOR_LABELS } from "../../adapters/ui/garmentColorPresentation";
+import { ColorSwatches } from "../components/ColorSwatches";
 import { EditProgressBar } from "../components/EditProgressBar";
 import { ImageUploader } from "../components/ImageUploader";
 import { OperationGallery } from "../components/OperationGallery";
@@ -24,6 +26,7 @@ export function EditorPage() {
     operationsError,
     operations,
     selectedOperation,
+    selectedColor,
     editGenerationStatus,
     editProgress,
     editError,
@@ -34,6 +37,7 @@ export function EditorPage() {
     analyze,
     selectRegion,
     selectOperation,
+    selectColor,
     requestEdit,
     confirmEdit,
     discardEdit,
@@ -139,6 +143,16 @@ export function EditorPage() {
                 onSelectOperation={selectOperation}
               />
             )}
+            {selectedOperationEntry && selectedOperationEntry.colors.length > 0 && (
+              <div className="mt-4 flex flex-col gap-2">
+                <span className="text-sm font-medium">Color</span>
+                <ColorSwatches
+                  colors={selectedOperationEntry.colors}
+                  selectedColor={selectedColor}
+                  onSelectColor={selectColor}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -149,6 +163,7 @@ export function EditorPage() {
             <CardTitle>3. Preview</CardTitle>
             <CardDescription>
               {REGION_LABELS[selectedRegion.regionType]} → {selectedOperationEntry.label}
+              {selectedColor && ` · ${GARMENT_COLOR_LABELS[selectedColor]}`}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">

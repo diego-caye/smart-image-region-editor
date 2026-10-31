@@ -30,6 +30,7 @@ from app.domain.ports.image_segmenter import ImageSegmenter, SegmentationResult
 from app.domain.ports.image_storage import ImageStorage
 from app.domain.value_objects.bounding_box import BoundingBox
 from app.domain.value_objects.edit_operation import EditOperation
+from app.domain.value_objects.garment_color import GarmentColor
 
 
 class FakeImageStorage(ImageStorage):
@@ -166,6 +167,7 @@ class FakeImageEditor(ImageEditor):
         mask_png_bytes: bytes,
         region_box: BoundingBox,
         operation: EditOperation,
+        color: GarmentColor | None = None,
         reference_image_png_bytes: bytes | None = None,
         on_progress: Callable[[EditorProgress], None] | None = None,
     ) -> EditResult:
@@ -177,7 +179,7 @@ class FakeImageEditor(ImageEditor):
             edited_region_png_bytes=_solid_png((region_box.width, region_box.height), (0, 255, 0)),
             region_box_used=region_box,
             seed=42,
-            model_metadata={"operation": operation.value},
+            model_metadata={"operation": operation.value, "color": color},
         )
 
 

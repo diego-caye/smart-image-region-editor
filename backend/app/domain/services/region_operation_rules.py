@@ -3,8 +3,14 @@ from __future__ import annotations
 from app.domain.value_objects.edit_operation import EditOperation
 from app.domain.value_objects.region_type import RegionType
 
-_HAND_GESTURES = frozenset(
-    {EditOperation.WAVE, EditOperation.PEACE_SIGN, EditOperation.THUMBS_UP, EditOperation.FIST}
+_HAND_OPERATIONS = frozenset(
+    {
+        EditOperation.WAVE,
+        EditOperation.PEACE_SIGN,
+        EditOperation.THUMBS_UP,
+        EditOperation.FIST,
+        EditOperation.GLOVES,
+    }
 )
 _ARM_ACCESSORIES = frozenset({EditOperation.WRISTWATCH, EditOperation.BRACELET})
 
@@ -13,18 +19,27 @@ _ARM_ACCESSORIES = frozenset({EditOperation.WRISTWATCH, EditOperation.BRACELET})
 # framework renders the picker or which model performs the edit — it belongs
 # here, not scattered across the HTTP layer or the ComfyUI adapter.
 _ALLOWED_OPERATIONS: dict[RegionType, frozenset[EditOperation]] = {
-    RegionType.LEFT_HAND: _HAND_GESTURES,
-    RegionType.RIGHT_HAND: _HAND_GESTURES,
+    RegionType.LEFT_HAND: _HAND_OPERATIONS,
+    RegionType.RIGHT_HAND: _HAND_OPERATIONS,
     RegionType.MOUTH: frozenset(
         {EditOperation.SMILE, EditOperation.SMILE_WITH_TEETH, EditOperation.CLOSED_MOUTH}
     ),
-    RegionType.EYES: frozenset({EditOperation.OPEN_EYES, EditOperation.CLOSED_EYES}),
+    RegionType.EYES: frozenset(
+        {EditOperation.OPEN_EYES, EditOperation.CLOSED_EYES, EditOperation.SUNGLASSES}
+    ),
     RegionType.TORSO: frozenset(
-        {EditOperation.RED_SHIRT, EditOperation.BLACK_JACKET, EditOperation.WHITE_TSHIRT}
+        {
+            EditOperation.SHIRT_COLOR,
+            EditOperation.T_SHIRT,
+            EditOperation.JACKET,
+            EditOperation.HOODIE,
+        }
     ),
     RegionType.LEFT_ARM: _ARM_ACCESSORIES,
     RegionType.RIGHT_ARM: _ARM_ACCESSORIES,
-    RegionType.LEGS: frozenset({EditOperation.BLUE_JEANS, EditOperation.SHORTS}),
+    RegionType.LEGS: frozenset(
+        {EditOperation.BLUE_JEANS, EditOperation.PANTS_COLOR, EditOperation.SHORTS}
+    ),
     # Detected and shown, not yet editable — no whole-face/whole-body
     # operation makes sense yet without a much larger, riskier edit than a
     # single gesture, expression, or garment.

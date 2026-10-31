@@ -8,6 +8,7 @@ import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
 import type { EditOperation } from "../../domain/types/EditOperation";
 import type { EditProgress } from "../../domain/types/EditProgress";
+import type { GarmentColor } from "../../domain/types/GarmentColor";
 import type { RegionType } from "../../domain/types/RegionType";
 import { httpClient, resolveAssetUrl } from "../../infrastructure/api/httpClient";
 
@@ -37,6 +38,7 @@ interface OperationResponseBody {
   operation: EditOperation;
   label: string;
   emoji: string;
+  colors: GarmentColor[];
 }
 
 interface ListOperationsResponseBody {
@@ -90,6 +92,7 @@ export class HttpImageApi implements ImageApiPort {
       operation: op.operation,
       label: op.label,
       emoji: op.emoji,
+      colors: op.colors,
     }));
   }
 
@@ -97,6 +100,7 @@ export class HttpImageApi implements ImageApiPort {
     imageId: string,
     regionId: string,
     operation: EditOperation,
+    color: GarmentColor | null,
     onProgress?: (progress: EditProgress) => void,
   ): Promise<EditGenerationResult> {
     // The POST only answers once the edit is done, so progress is read
@@ -105,6 +109,7 @@ export class HttpImageApi implements ImageApiPort {
     const request = httpClient.postJson<EditRegionResponseBody>(`/images/${imageId}/edits`, {
       region_id: regionId,
       operation,
+      ...(color ? { color } : {}),
       progress_id: progressId,
     });
     const stopPolling = onProgress ? pollProgress(progressId, onProgress) : () => {};

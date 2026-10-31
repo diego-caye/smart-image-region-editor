@@ -14,6 +14,13 @@ instructions for an editor ("Change the hand gesture to..."), while CLIP is
 trained on image captions ("a photo of a hand making a peace sign") and
 scores those far more reliably.
 
+Operations that take a GarmentColor are scored on two axes, and must pass
+both: the color (the caption in the requested color against the same
+caption in every other palette color) and, unless the operation only
+recolors, the garment type (as above, among the region's garments). Either
+axis alone lets a wrong edit through: a red jacket where a red hoodie was
+asked, or a blue hoodie where a red one was.
+
 Runs on CPU on purpose — CLIP ViT-B/32 is small enough, and it keeps the
 evaluator from competing for VRAM with ComfyUI or anything else on the GPU.
 """
@@ -28,6 +35,7 @@ from PIL import Image
 
 from app.domain.services.region_operation_rules import operations_allowed_for
 from app.domain.value_objects.edit_operation import EditOperation
+from app.domain.value_objects.garment_color import GarmentColor
 from app.domain.value_objects.region_type import RegionType
 
 CLIP_MODEL_ID = "openai/clip-vit-base-patch32"
@@ -42,14 +50,23 @@ CAPTIONS: dict[EditOperation, str] = {
     EditOperation.CLOSED_MOUTH: "a photo of a neutral closed mouth",
     EditOperation.OPEN_EYES: "a photo of wide open eyes",
     EditOperation.CLOSED_EYES: "a photo of closed eyes",
-    EditOperation.RED_SHIRT: "a photo of a person wearing a red shirt",
-    EditOperation.BLACK_JACKET: "a photo of a person wearing a black jacket",
-    EditOperation.WHITE_TSHIRT: "a photo of a person wearing a white t-shirt",
+    EditOperation.SUNGLASSES: "a photo of eyes covered by dark sunglasses",
+    EditOperation.GLOVES: "a photo of a hand wearing a glove",
+    # {color} is filled with "red " etc., or "" when scoring the garment type
+    EditOperation.SHIRT_COLOR: "a photo of a person wearing a {color}shirt",
+    EditOperation.T_SHIRT: "a photo of a person wearing a {color}t-shirt",
+    EditOperation.JACKET: "a photo of a person wearing a {color}jacket",
+    EditOperation.HOODIE: "a photo of a person wearing a {color}hoodie",
     EditOperation.BLUE_JEANS: "a photo of legs wearing blue denim jeans",
-    EditOperation.SHORTS: "a photo of legs wearing shorts",
+    EditOperation.PANTS_COLOR: "a photo of legs wearing {color}pants",
+    EditOperation.SHORTS: "a photo of legs wearing {color}shorts",
     EditOperation.WRISTWATCH: "a photo of an arm wearing a wristwatch",
     EditOperation.BRACELET: "a photo of an arm wearing a bracelet",
 }
+
+# Only change a color, not what's worn: no garment-type axis, and not a
+# garment-type candidate for the region's other operations either.
+_RECOLOR_ONLY = frozenset({EditOperation.SHIRT_COLOR, EditOperation.PANTS_COLOR})
 
 # With only two candidate operations, one of them always wins a two-way
 # softmax even on an untouched arm, so arms also compete against "neither".
@@ -71,9 +88,17 @@ class EditQualityResult:
     notes: str
 
 
+def caption_for(operation: EditOperation, color: GarmentColor | None = None) -> str:
+    return CAPTIONS[operation].format(color=f"{color} " if color else "")
+
+
 def candidate_captions(region_type: RegionType) -> list[str]:
-    allowed = sorted(operations_allowed_for(region_type), key=lambda op: op.value)
-    return [CAPTIONS[op] for op in allowed] + list(_EXTRA_DISTRACTORS.get(region_type, ()))
+    allowed = sorted(operations_allowed_for(region_type) - _RECOLOR_ONLY, key=lambda op: op.value)
+    return [caption_for(op) for op in allowed] + list(_EXTRA_DISTRACTORS.get(region_type, ()))
+
+
+def color_captions(operation: EditOperation) -> list[str]:
+    return [caption_for(operation, color) for color in GarmentColor]
 
 
 def evaluate_edit_quality(
@@ -82,6 +107,7 @@ def evaluate_edit_quality(
     region_type: RegionType,
     operation: EditOperation,
     *,
+    color: GarmentColor | None = None,
     min_score: float = 0.5,
     min_gain: float = 0.1,
     scorer: Scorer | None = None,
@@ -89,21 +115,50 @@ def evaluate_edit_quality(
     """min_gain exists because CLIP is noisy on some unedited crops — it gave
     "an arm wearing a wristwatch" 0.64 on a real arm with no watch — so
     "slightly higher than before" alone would let a no-op edit pass."""
-    captions = candidate_captions(region_type)
     if operation not in operations_allowed_for(region_type):
         raise ValueError(f"'{operation}' is not an operation for region '{region_type}'")
-    target_index = captions.index(CAPTIONS[operation])
 
-    original = Image.open(BytesIO(original_region_png_bytes)).convert("RGB")
-    edited = Image.open(BytesIO(edited_region_png_bytes)).convert("RGB")
-    original_probs, edited_probs = (scorer or clip_scorer())([original, edited], captions)
+    axes: list[tuple[str, list[str], str]] = []  # (name, candidates, target)
+    if color is not None:
+        axes.append(("color", color_captions(operation), caption_for(operation, color)))
+    if operation not in _RECOLOR_ONLY:
+        axes.append(("type", candidate_captions(region_type), caption_for(operation)))
 
+    images = [
+        Image.open(BytesIO(png)).convert("RGB")
+        for png in (original_region_png_bytes, edited_region_png_bytes)
+    ]
+    score_images = scorer or clip_scorer()
+    results = [
+        _score_axis(score_images, images, name, captions, target, min_score, min_gain)
+        for name, captions, target in axes
+    ]
+    weakest = min(results, key=lambda r: r.score)
+    return EditQualityResult(
+        score=weakest.score,
+        original_score=weakest.original_score,
+        passed=all(r.passed for r in results),
+        notes=" | ".join(r.notes for r in results),
+    )
+
+
+def _score_axis(
+    scorer: Scorer,
+    images: list[Image.Image],
+    name: str,
+    captions: list[str],
+    target: str,
+    min_score: float,
+    min_gain: float,
+) -> EditQualityResult:
+    target_index = captions.index(target)
+    original_probs, edited_probs = scorer(images, captions)
     score = edited_probs[target_index]
     original_score = original_probs[target_index]
     winner = captions[max(range(len(captions)), key=edited_probs.__getitem__)]
     passed = score >= min_score and score - original_score >= min_gain
     notes = (
-        f"p(target) {original_score:.2f} -> {score:.2f}; "
+        f"{name}: p(target) {original_score:.2f} -> {score:.2f}; "
         f"edited crop's top caption: '{winner}'"
     )
     return EditQualityResult(

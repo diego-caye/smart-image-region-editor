@@ -19,6 +19,7 @@ from app.domain.entities.region import DetectedRegion
 from app.domain.ports.image_repository import ImageRepository
 from app.domain.value_objects.bounding_box import BoundingBox
 from app.domain.value_objects.edit_operation import EditOperation
+from app.domain.value_objects.garment_color import GarmentColor
 from app.domain.value_objects.region_type import RegionType
 from app.infrastructure.database.models import EditRow, EditSessionRow, ImageRow, MaskRow, RegionRow
 
@@ -199,6 +200,7 @@ def _edit_to_row(edit: Edit) -> EditRow:
         session_id=edit.session_id,
         region_id=edit.region_id,
         operation=edit.operation.value,
+        color=edit.color.value if edit.color else None,
         source_image_ref=edit.source_image_ref,
         status=edit.status.value,
         preview_ref=edit.preview_ref,
@@ -217,6 +219,7 @@ def _row_to_edit(row: EditRow) -> Edit:
         session_id=row.session_id,
         region_id=row.region_id,
         operation=EditOperation(row.operation),
+        color=GarmentColor(row.color) if row.color else None,
         source_image_ref=row.source_image_ref,
         status=EditStatus(row.status),
         preview_ref=row.preview_ref,

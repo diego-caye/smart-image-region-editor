@@ -5,6 +5,10 @@ correctly, which the in-memory fakes used elsewhere can't verify.
 
 from __future__ import annotations
 
+from uuid import uuid4
+
+from sqlalchemy import text
+
 from app.adapters.persistence.sqlalchemy_image_repository import SqlAlchemyImageRepository
 from app.domain.entities.edit import Edit
 from app.domain.entities.edit_session import EditSession
@@ -13,6 +17,7 @@ from app.domain.entities.mask import Mask
 from app.domain.entities.region import DetectedRegion
 from app.domain.value_objects.bounding_box import BoundingBox
 from app.domain.value_objects.edit_operation import EditOperation
+from app.domain.value_objects.garment_color import GarmentColor
 from app.domain.value_objects.region_type import RegionType
 from app.infrastructure.config.settings import Settings
 from app.infrastructure.database.engine import init_db, make_engine, make_session
@@ -121,3 +126,49 @@ def test_edit_session_and_edit_round_trip(tmp_path):
     assert loaded_edit.status.value == "preview_ready"
     assert loaded_edit.seed == 99
     assert loaded_edit.model_metadata == {"steps": 4}
+
+
+def test_edit_color_round_trips(tmp_path):
+    repo = _repo_for(tmp_path)
+    edit = Edit.new(
+        session_id=uuid4(),
+        region_id=uuid4(),
+        operation=EditOperation.HOODIE,
+        source_image_ref="original/1.png",
+        color=GarmentColor.GREEN,
+    )
+    repo.save_edit(edit)
+
+    assert repo.get_edit(edit.id).color is GarmentColor.GREEN
+
+
+def test_init_db_upgrades_a_database_from_before_garment_colors(tmp_path):
+    # The edits table as it was before the color column existed, holding an
+    # edit made with an operation that has since become a colored one.
+    engine = make_engine(Settings(database_url=f"sqlite:///{tmp_path / 'old.db'}"))
+    edit_id = uuid4()
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE edits (id CHAR(32) PRIMARY KEY, session_id CHAR(32) NOT NULL,"
+                " region_id CHAR(32) NOT NULL, operation VARCHAR NOT NULL,"
+                " source_image_ref VARCHAR NOT NULL, status VARCHAR NOT NULL,"
+                " preview_ref VARCHAR, final_ref VARCHAR, seed INTEGER, model_metadata JSON,"
+                " error_message VARCHAR, created_at DATETIME NOT NULL,"
+                " updated_at DATETIME NOT NULL)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO edits VALUES (:id, :sid, :rid, 'red_shirt', 'original/1.png',"
+                " 'confirmed', NULL, NULL, NULL, '{}', NULL, :now, :now)"
+            ),
+            {"id": edit_id.hex, "sid": uuid4().hex, "rid": uuid4().hex, "now": "2026-01-01 00:00:00.000000"},
+        )
+
+    init_db(engine)
+    init_db(engine)  # idempotent: a second start must not fail
+
+    loaded = SqlAlchemyImageRepository(make_session(engine)).get_edit(edit_id)
+    assert loaded.operation is EditOperation.SHIRT_COLOR
+    assert loaded.color is GarmentColor.RED

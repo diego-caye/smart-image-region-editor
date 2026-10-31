@@ -6,6 +6,7 @@ import { listOperationsForRegion } from "../../application/use-cases/listOperati
 import { requestEdit as requestEditUseCase } from "../../application/use-cases/requestEdit";
 import { uploadImage } from "../../application/use-cases/uploadImage";
 import type { EditOperation } from "../../domain/types/EditOperation";
+import type { GarmentColor } from "../../domain/types/GarmentColor";
 import { useEditSessionContext } from "../../infrastructure/state/EditSessionContext";
 
 function messageFrom(error: unknown): string {
@@ -68,6 +69,13 @@ export function useEditSession() {
     [dispatch],
   );
 
+  const selectColor = useCallback(
+    (color: GarmentColor) => {
+      dispatch({ type: "SELECT_COLOR", color });
+    },
+    [dispatch],
+  );
+
   const requestEdit = useCallback(async () => {
     if (!state.image || !state.selectedRegionId || !state.selectedOperation) return;
     dispatch({ type: "EDIT_START" });
@@ -77,6 +85,7 @@ export function useEditSession() {
         state.image.imageId,
         state.selectedRegionId,
         state.selectedOperation,
+        state.selectedColor,
         (progress) => dispatch({ type: "EDIT_PROGRESS", progress }),
       );
       dispatch({
@@ -89,7 +98,14 @@ export function useEditSession() {
     } catch (error) {
       dispatch({ type: "EDIT_REQUEST_ERROR", message: messageFrom(error) });
     }
-  }, [api, dispatch, state.image, state.selectedRegionId, state.selectedOperation]);
+  }, [
+    api,
+    dispatch,
+    state.image,
+    state.selectedRegionId,
+    state.selectedOperation,
+    state.selectedColor,
+  ]);
 
   const confirmEdit = useCallback(async () => {
     if (!state.editId) return;
@@ -119,6 +135,7 @@ export function useEditSession() {
     analyze,
     selectRegion,
     selectOperation,
+    selectColor,
     requestEdit,
     confirmEdit,
     discardEdit,

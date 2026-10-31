@@ -5,6 +5,7 @@ import type { Region } from "../../domain/entities/Region";
 import type { UploadedImage } from "../../domain/entities/UploadedImage";
 import type { EditOperation } from "../../domain/types/EditOperation";
 import type { EditProgress } from "../../domain/types/EditProgress";
+import type { GarmentColor } from "../../domain/types/GarmentColor";
 
 export type UploadStatus = "idle" | "uploading" | "ready" | "error";
 export type AnalysisStatus = "idle" | "analyzing" | "ready" | "error";
@@ -32,6 +33,9 @@ export interface EditSessionState {
   operations: OperationCatalogEntry[];
 
   selectedOperation: EditOperation | null;
+  // Preselected to the palette's first color when a garment is picked, so
+  // "Generate preview" always has everything it needs.
+  selectedColor: GarmentColor | null;
 
   editId: string | null;
   editGenerationStatus: EditGenerationStatus;
@@ -55,6 +59,7 @@ export type EditSessionAction =
   | { type: "OPERATIONS_SUCCESS"; operations: OperationCatalogEntry[] }
   | { type: "OPERATIONS_ERROR"; message: string }
   | { type: "SELECT_OPERATION"; operation: EditOperation }
+  | { type: "SELECT_COLOR"; color: GarmentColor }
   | { type: "EDIT_START" }
   | { type: "EDIT_PROGRESS"; progress: EditProgress }
   | {
@@ -85,6 +90,7 @@ const initialState: EditSessionState = {
   operationsError: null,
   operations: [],
   selectedOperation: null,
+  selectedColor: null,
   editId: null,
   editGenerationStatus: "idle",
   editProgress: null,
@@ -135,6 +141,7 @@ function reducer(state: EditSessionState, action: EditSessionAction): EditSessio
         operationsError: null,
         operations: [],
         selectedOperation: null,
+        selectedColor: null,
         ...clearedEditState,
       };
     case "OPERATIONS_START":
@@ -144,10 +151,19 @@ function reducer(state: EditSessionState, action: EditSessionAction): EditSessio
     case "OPERATIONS_ERROR":
       return { ...state, operationsStatus: "error", operationsError: action.message };
 
-    // Picking a different operation invalidates any preview generated for
-    // the previous one.
-    case "SELECT_OPERATION":
-      return { ...state, selectedOperation: action.operation, ...clearedEditState };
+    // Picking a different operation (or color) invalidates any preview
+    // generated for the previous one.
+    case "SELECT_OPERATION": {
+      const entry = state.operations.find((op) => op.operation === action.operation);
+      return {
+        ...state,
+        selectedOperation: action.operation,
+        selectedColor: entry?.colors[0] ?? null,
+        ...clearedEditState,
+      };
+    }
+    case "SELECT_COLOR":
+      return { ...state, selectedColor: action.color, ...clearedEditState };
 
     case "EDIT_START":
       return {
@@ -192,6 +208,7 @@ function reducer(state: EditSessionState, action: EditSessionAction): EditSessio
         operationsStatus: "idle",
         operations: [],
         selectedOperation: null,
+        selectedColor: null,
         ...clearedEditState,
       };
     case "CONFIRM_ERROR":

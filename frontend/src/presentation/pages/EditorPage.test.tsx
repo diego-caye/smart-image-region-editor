@@ -79,8 +79,8 @@ describe("EditorPage", () => {
     ];
     api.operationsByRegion = {
       right_hand: [
-        { operation: "peace_sign", label: "Peace sign", emoji: "✌️" },
-        { operation: "wave", label: "Wave", emoji: "👋" },
+        { operation: "peace_sign", label: "Peace sign", emoji: "✌️", colors: [] },
+        { operation: "wave", label: "Wave", emoji: "👋", colors: [] },
       ],
     };
     renderWithFakeApi(api);
@@ -123,8 +123,8 @@ describe("EditorPage", () => {
       },
     ];
     api.operationsByRegion = {
-      right_hand: [{ operation: "peace_sign", label: "Peace sign", emoji: "✌️" }],
-      left_hand: [{ operation: "fist", label: "Fist", emoji: "✊" }],
+      right_hand: [{ operation: "peace_sign", label: "Peace sign", emoji: "✌️", colors: [] }],
+      left_hand: [{ operation: "fist", label: "Fist", emoji: "✊", colors: [] }],
     };
     renderWithFakeApi(api);
     const user = await uploadAFile();
@@ -154,7 +154,7 @@ describe("EditorPage", () => {
       },
     ];
     api.operationsByRegion = {
-      right_hand: [{ operation: "peace_sign", label: "Peace sign", emoji: "✌️" }],
+      right_hand: [{ operation: "peace_sign", label: "Peace sign", emoji: "✌️", colors: [] }],
     };
     renderWithFakeApi(api);
     const user = await uploadAFile();
@@ -165,6 +165,43 @@ describe("EditorPage", () => {
     await user.click(screen.getByRole("button", { name: /Peace sign/ }));
     return user;
   }
+
+  it("a garment shows its palette, preselects the first color and sends the picked one", async () => {
+    const api = new FakeImageApiPort();
+    api.nextAnalyzeResult = [
+      {
+        regionId: "region-torso",
+        regionType: "torso",
+        boundingBox: { x: 100, y: 100, width: 50, height: 50 },
+        confidence: 0.9,
+      },
+    ];
+    api.operationsByRegion = {
+      torso: [
+        { operation: "hoodie", label: "Hoodie", emoji: "👚", colors: ["red", "blue", "black"] },
+        { operation: "t_shirt", label: "T-shirt", emoji: "👕", colors: ["red", "blue", "black"] },
+      ],
+    };
+    renderWithFakeApi(api);
+    const user = await uploadAFile();
+    await user.click(screen.getByRole("button", { name: "Analyze image" }));
+    await waitFor(() => screen.getByRole("button", { name: "Torso" }));
+    await user.click(screen.getByRole("button", { name: "Torso" }));
+    await waitFor(() => screen.getByRole("button", { name: /Hoodie/ }));
+
+    expect(screen.queryByRole("radiogroup", { name: "Color" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Hoodie/ }));
+
+    expect(screen.getByRole("radio", { name: "Red" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByText(/Torso.*Hoodie · Red/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "Blue" }));
+    expect(screen.getByText(/Torso.*Hoodie · Blue/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Generate preview" }));
+    await waitFor(() => expect(api.requestedEdits).toHaveLength(1));
+    expect(api.requestedEdits[0]).toMatchObject({ operation: "hoodie", color: "blue" });
+  });
 
   it("generates a preview and accepting it updates the image and resets selection", async () => {
     const api = new FakeImageApiPort();
@@ -186,7 +223,7 @@ describe("EditorPage", () => {
       );
     });
     expect(api.requestedEdits).toEqual([
-      { imageId: "fake-image-id", regionId: "region-hand", operation: "peace_sign" },
+      { imageId: "fake-image-id", regionId: "region-hand", operation: "peace_sign", color: null },
     ]);
 
     await user.click(screen.getByRole("button", { name: "Accept" }));

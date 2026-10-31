@@ -14,6 +14,7 @@ from app.domain.ports.image_repository import ImageRepository
 from app.domain.ports.image_segmenter import ImageSegmenter
 from app.domain.ports.image_storage import ImageStorage
 from app.domain.services.mask_rules import mask_grow_px_for
+from app.domain.services.operation_options import ensure_valid_options
 from app.domain.services.region_operation_rules import ensure_operation_allowed
 
 if TYPE_CHECKING:
@@ -70,6 +71,7 @@ class EditRegionUseCase:
             raise RegionNotFound(str(request.region_id))
 
         ensure_operation_allowed(region.region_type, request.operation)
+        ensure_valid_options(request.operation, request.color)
 
         session = self._repo.get_edit_session_for_image(image.id)
         if session is None:
@@ -80,6 +82,7 @@ class EditRegionUseCase:
             region_id=region.id,
             operation=request.operation,
             source_image_ref=session.current_image_ref,
+            color=request.color,
         )
         self._repo.save_edit(edit)
         session.record_edit(edit.id)
@@ -99,6 +102,7 @@ class EditRegionUseCase:
                 mask_png_bytes=mask_bytes,
                 region_box=region.bounding_box,
                 operation=request.operation,
+                color=request.color,
                 on_progress=lambda p: report(EditProgress.from_editor(p)),
             )
 

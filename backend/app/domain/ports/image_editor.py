@@ -7,6 +7,7 @@ from enum import StrEnum
 
 from app.domain.value_objects.bounding_box import BoundingBox
 from app.domain.value_objects.edit_operation import EditOperation
+from app.domain.value_objects.garment_color import GarmentColor
 
 
 @dataclass(slots=True)
@@ -54,11 +55,13 @@ class ImageEditor(ABC):
         mask_png_bytes: bytes,
         region_box: BoundingBox,
         operation: EditOperation,
+        color: GarmentColor | None = None,
         reference_image_png_bytes: bytes | None = None,
         on_progress: Callable[[EditorProgress], None] | None = None,
     ) -> EditResult:
         """image_png_bytes/mask_png_bytes are full-size and share the same
-        dimensions; region_box marks where the edit is requested.
+        dimensions; region_box marks where the edit is requested. color is
+        set exactly for operations that take one (operation_options.py).
         Implementations decide how much surrounding context to include when
         cropping for the underlying model, and report back the exact box the
         returned crop covers via region_box_used (it may be larger than

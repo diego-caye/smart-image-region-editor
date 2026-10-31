@@ -12,6 +12,7 @@ belt-and-suspenders alongside the compositor, which is what actually
 from __future__ import annotations
 
 from app.domain.value_objects.edit_operation import EditOperation
+from app.domain.value_objects.garment_color import GarmentColor
 
 _PRESERVE_CLAUSE = (
     " Keep the skin tone, clothing, lighting, art style and background exactly the same."
@@ -45,6 +46,11 @@ _PROMPTS: dict[EditOperation, str] = {
         "into the palm, thumb wrapped over the fingers."
         + _PRESERVE_CLAUSE
     ),
+    EditOperation.GLOVES: (
+        "Put a black leather glove on the hand, keeping the exact same gesture "
+        "and finger positions."
+        + _GARMENT_PRESERVE_CLAUSE
+    ),
     EditOperation.SMILE: (
         "Change the mouth to a gentle closed-mouth smile, corners of the lips "
         "turned upward."
@@ -68,34 +74,14 @@ _PROMPTS: dict[EditOperation, str] = {
         "fully down."
         + _PRESERVE_CLAUSE
     ),
-    # Names what to leave alone on purpose: on a subject wearing an open
-    # jacket over a T-shirt, an earlier "the shirt, including its sleeves"
-    # wording made Qwen paint the *jacket's* sleeves red (the shirt's own
-    # sleeves being hidden), leaving a gray vest with red sleeves.
-    EditOperation.RED_SHIRT: (
-        "Change the color of the shirt or T-shirt worn on the upper body to a "
-        "solid bright red, keeping its cut, fit and fabric folds. Leave anything "
-        "worn over it, such as a jacket or coat, unchanged."
-        + _GARMENT_PRESERVE_CLAUSE
-    ),
-    EditOperation.BLACK_JACKET: (
-        "Dress the upper body in a black jacket, sleeves included, fitted "
-        "naturally to the pose with realistic fabric folds."
-        + _GARMENT_PRESERVE_CLAUSE
-    ),
-    EditOperation.WHITE_TSHIRT: (
-        "Change the top on the upper body into a plain white crew-neck "
-        "T-shirt, fitted naturally to the pose."
-        + _GARMENT_PRESERVE_CLAUSE
+    EditOperation.SUNGLASSES: (
+        "Add a pair of dark sunglasses with thin black frames over the eyes, "
+        "resting naturally on the nose and following the angle of the face."
+        + _PRESERVE_CLAUSE
     ),
     EditOperation.BLUE_JEANS: (
         "Change the pants on both legs into classic blue denim jeans, keeping "
         "the same fit and length, with fabric folds following the pose."
-        + _GARMENT_PRESERVE_CLAUSE
-    ),
-    EditOperation.SHORTS: (
-        "Change the pants on both legs into knee-length shorts, showing the "
-        "lower legs below the knees with natural skin, same shoes."
         + _GARMENT_PRESERVE_CLAUSE
     ),
     EditOperation.WRISTWATCH: (
@@ -110,7 +96,64 @@ _PROMPTS: dict[EditOperation, str] = {
 }
 
 
-def prompt_for(operation: EditOperation) -> str:
+# Garment operations that take a GarmentColor (operation_options.py): the
+# template gets the color phrase via {color}.
+_COLORED_PROMPTS: dict[EditOperation, str] = {
+    # Names what to leave alone on purpose: on a subject wearing an open
+    # jacket over a T-shirt, an earlier "the shirt, including its sleeves"
+    # wording made Qwen paint the *jacket's* sleeves red (the shirt's own
+    # sleeves being hidden), leaving a gray vest with red sleeves.
+    EditOperation.SHIRT_COLOR: (
+        "Change the color of the shirt or T-shirt worn on the upper body to a "
+        "solid {color}, keeping its cut, fit and fabric folds. Leave anything "
+        "worn over it, such as a jacket or coat, unchanged."
+        + _GARMENT_PRESERVE_CLAUSE
+    ),
+    EditOperation.T_SHIRT: (
+        "Change the top on the upper body into a plain {color} crew-neck "
+        "T-shirt, fitted naturally to the pose."
+        + _GARMENT_PRESERVE_CLAUSE
+    ),
+    EditOperation.JACKET: (
+        "Dress the upper body in a {color} jacket, sleeves included, fitted "
+        "naturally to the pose with realistic fabric folds."
+        + _GARMENT_PRESERVE_CLAUSE
+    ),
+    EditOperation.HOODIE: (
+        "Change the top on the upper body into a plain {color} hooded "
+        "sweatshirt, hood down behind the neck, fitted naturally to the pose."
+        + _GARMENT_PRESERVE_CLAUSE
+    ),
+    EditOperation.PANTS_COLOR: (
+        "Change the color of the pants on both legs to a solid {color}, "
+        "keeping their cut, fit, length and fabric folds."
+        + _GARMENT_PRESERVE_CLAUSE
+    ),
+    EditOperation.SHORTS: (
+        "Change the pants on both legs into {color} knee-length shorts, showing "
+        "the lower legs below the knees with natural skin, same shoes."
+        + _GARMENT_PRESERVE_CLAUSE
+    ),
+}
+
+# A slightly more specific phrase than the bare color name, so the shade
+# asked for is less open to interpretation.
+_COLOR_PHRASES: dict[GarmentColor, str] = {
+    GarmentColor.RED: "bright red",
+    GarmentColor.BLUE: "royal blue",
+    GarmentColor.GREEN: "forest green",
+    GarmentColor.YELLOW: "mustard yellow",
+    GarmentColor.BLACK: "deep black",
+    GarmentColor.WHITE: "pure white",
+    GarmentColor.GRAY: "medium gray",
+}
+
+
+def prompt_for(operation: EditOperation, color: GarmentColor | None = None) -> str:
+    if operation in _COLORED_PROMPTS:
+        if color is None:
+            raise ValueError(f"Operation '{operation}' needs a color")
+        return _COLORED_PROMPTS[operation].format(color=_COLOR_PHRASES[color])
     try:
         return _PROMPTS[operation]
     except KeyError as exc:
