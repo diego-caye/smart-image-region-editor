@@ -1,5 +1,7 @@
 # Smart Image Region Editor
 
+[![CI](https://github.com/diego-caye/smart-image-region-editor/actions/workflows/ci.yml/badge.svg)](https://github.com/diego-caye/smart-image-region-editor/actions/workflows/ci.yml)
+
 Upload a photo, and the app detects its regions: face, hands, mouth, eyes,
 torso, arms, legs. Click one, pick a predefined edit like "✌️ Peace sign" or
 "👖 Blue jeans", and only that region changes; everything outside it stays
