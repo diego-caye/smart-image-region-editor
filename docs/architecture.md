@@ -692,7 +692,17 @@ differs):
    accepts `reference_image_png_bytes` and the workflow already has
    `TextEncodeQwenImageEditPlus`'s `image2`/`image3` fields available —
    unused today because the text-only prompt already gives good results.
-5. **Thin eyes box on small faces**: `EYES`'s padding is proportional to the
+5. **Inner-layer mask for under-garments**: the TORSO mask is the union
+   of the jacket and what's under it (see SAM2 above), so a hoodie or
+   T-shirt edit is *allowed* to repaint the jacket's sleeves — and a
+   hoodie did, in 1 of 4 measured runs. Prompting against it backfired:
+   "leave the jacket unchanged, including its sleeves" made it 7 of 7,
+   apparently by drawing the edit's attention to the jacket. The robust
+   fix is structural, like the compositor itself: for operations that
+   change the inner layer, composite through the center-point segment
+   only (the visible shirt), so the jacket can't change by construction.
+   That needs masks cached per (region, layer) instead of per region.
+6. **Thin eyes box on small faces**: `EYES`'s padding is proportional to the
    raw landmark box, so on a photo with a face of only a few pixels (see
    the MediaPipe section above) the resulting box can end up too thin for a
    convincing open/close edit. Fixing this would need a minimum pixel

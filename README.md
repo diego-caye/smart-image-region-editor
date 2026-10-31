@@ -260,9 +260,11 @@ only has to gain, not win. And CLIP's score for the (visibly correct)
 toothy smile varied between 0.48 and 0.77 across three runs, so that case
 asks for 0.4 plus the usual +0.1 gain.
 
-Known limit, visible in the hoodie example: a garment that reaches past the
-region's outline (a hood rising above the collar) is cut off softly at the
-mask's feathered edge.
+Known limits, both on a person in an open jacket: a garment that reaches
+past the region's outline (a hood rising above the collar) is cut off
+softly at the mask's feathered edge; and a hoodie sometimes takes over the
+jacket's sleeves, leaving a vest (1 of 4 measured runs). Naming the jacket
+in the prompt made it worse (7 of 7), so the prompt doesn't.
 
 The first real run is what found three bugs: the preservation check was
 measuring against the raw mask instead of the one the compositor actually
