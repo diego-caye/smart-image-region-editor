@@ -58,3 +58,13 @@ addopts = "-m \"not live_comfyui and not live_models\""
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
+# Pinned explicitly (not ruff's defaults, which change between versions) so
+# CI behaves the same whichever ruff release it installs.
+select = ["E4", "E7", "E9", "F", "I", "B", "BLE", "RUF", "YTT"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom: these calls in argument defaults are
+# evaluated per request by FastAPI, not once at import like B008 assumes.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Form", "fastapi.Query"]

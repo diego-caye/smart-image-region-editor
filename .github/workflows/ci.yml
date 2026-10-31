@@ -24,6 +24,7 @@ jobs:
       # mediapipe is the one exception — three tests check landmark index
       # sets against the real package's constants instead of hand copies.
       - run: pip install -e ".[dev]" "mediapipe>=1.0.1"
+      - run: ruff check app tests
       - run: pytest
 
   frontend:

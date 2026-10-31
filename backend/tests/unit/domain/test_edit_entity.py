@@ -1,5 +1,6 @@
-import pytest
 from uuid import uuid4
+
+import pytest
 
 from app.domain.entities.edit import Edit, EditStatus, InvalidEditTransition
 from app.domain.value_objects.edit_operation import EditOperation

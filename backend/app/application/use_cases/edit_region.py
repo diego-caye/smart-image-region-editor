@@ -122,7 +122,7 @@ class EditRegionUseCase:
             return EditRegionResult(
                 edit_id=edit.id, status=edit.status, preview_url=self._storage.url_for(preview_ref)
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - see below
             # Contained on purpose: a failed edit is a normal, expected outcome
             # (a flaky ComfyUI call, an OOM, ...) that must be recorded on the
             # Edit and reported to the caller, not surfaced as a bare 500.

@@ -197,5 +197,5 @@ class ComfyUIClient:
 def _safe_json(response: httpx.Response) -> str:
     try:
         return str(response.json())
-    except Exception:
+    except ValueError:  # body isn't JSON (json.JSONDecodeError is a ValueError)
         return response.text

@@ -26,7 +26,7 @@ class YoloImageDetector(ImageDetector):
         self._hand_detector = hand_detector
 
     def detect(self, image_bytes: bytes, *, image_id: UUID) -> list[DetectedRegion]:
-        image_width, image_height = PILImage.open(BytesIO(image_bytes)).size
+        image_width = PILImage.open(BytesIO(image_bytes)).width
 
         try:
             face_detections = self._face_detector.detect(image_bytes)

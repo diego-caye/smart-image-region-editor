@@ -168,7 +168,7 @@ def test_mask_is_only_segmented_once_and_then_reused():
     segment_calls = {"count": 0}
 
     class CountingSegmenter(FakeImageSegmenter):
-        def segment(self, image_bytes, region):  # noqa: ANN001
+        def segment(self, image_bytes, region):
             segment_calls["count"] += 1
             return super().segment(image_bytes, region)
 

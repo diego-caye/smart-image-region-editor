@@ -21,7 +21,7 @@ def _download_if_missing(dest: Path, url: str) -> Path:
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
-    urllib.request.urlretrieve(url, tmp)  # noqa: S310 - fixed, https, verified URL
+    urllib.request.urlretrieve(url, tmp)
     tmp.rename(dest)
     return dest
 
@@ -31,7 +31,7 @@ class Landmarks:
     plus the image's own pixel size so callers can convert back to pixel
     coordinates."""
 
-    __slots__ = ("points", "image_width", "image_height")
+    __slots__ = ("image_height", "image_width", "points")
 
     def __init__(
         self, points: list[tuple[float, float]], image_width: int, image_height: int

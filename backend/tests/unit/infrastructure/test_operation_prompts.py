@@ -1,7 +1,7 @@
 import pytest
 
-from app.infrastructure.image_editing.comfyui.operation_prompts import prompt_for
 from app.domain.value_objects.edit_operation import EditOperation
+from app.infrastructure.image_editing.comfyui.operation_prompts import prompt_for
 
 
 @pytest.mark.parametrize("operation", list(EditOperation))
