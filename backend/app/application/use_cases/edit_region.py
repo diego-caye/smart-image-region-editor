@@ -13,9 +13,10 @@ from app.domain.ports.image_editor import ImageEditor
 from app.domain.ports.image_repository import ImageRepository
 from app.domain.ports.image_segmenter import ImageSegmenter
 from app.domain.ports.image_storage import ImageStorage
-from app.domain.services.mask_rules import mask_grow_px_for
+from app.domain.services.mask_rules import mask_grow_px_for, mask_scope_for
 from app.domain.services.operation_options import ensure_valid_options
 from app.domain.services.region_operation_rules import ensure_operation_allowed
+from app.domain.value_objects.mask_scope import MaskScope
 
 if TYPE_CHECKING:
     from app.domain.entities.region import DetectedRegion
@@ -94,7 +95,9 @@ class EditRegionUseCase:
             report = self._reporter(request.progress_id)
             report(EditProgress.at(EditStage.SEGMENTING))
             current_image_bytes = self._storage.load(session.current_image_ref)
-            mask = self._get_or_create_mask(current_image_bytes, region)
+            mask = self._get_or_create_mask(
+                current_image_bytes, region, mask_scope_for(region.region_type, request.operation)
+            )
             mask_bytes = self._storage.load(mask.storage_ref)
 
             editor_result = self._editor.edit(
@@ -142,13 +145,22 @@ class EditRegionUseCase:
         tracker = self._progress_tracker
         return lambda progress: tracker.report(progress_id, progress)
 
-    def _get_or_create_mask(self, image_bytes: bytes, region: DetectedRegion) -> Mask:
-        if region.mask_id is not None:
+    def _get_or_create_mask(
+        self, image_bytes: bytes, region: DetectedRegion, scope: MaskScope
+    ) -> Mask:
+        """One mask per (region, scope), segmented on first use. The
+        whole-region mask is the one the region links to; others are found
+        by scope."""
+        if scope is MaskScope.WHOLE_REGION and region.mask_id is not None:
             mask = self._repo.get_mask(region.mask_id)
             if mask is not None:
                 return mask
+        if scope is not MaskScope.WHOLE_REGION:
+            for mask in self._repo.get_masks_for_region(region.id):
+                if mask.scope is scope:
+                    return mask
 
-        segmentation = self._segmenter.segment(image_bytes, region)
+        segmentation = self._segmenter.segment(image_bytes, region, scope=scope)
         mask_ref = self._storage.save(segmentation.mask_png_bytes, kind="mask")
         mask = Mask.new(
             region_id=region.id,
@@ -157,7 +169,9 @@ class EditRegionUseCase:
             height=segmentation.height,
             feather_px=self._mask_feather_px,
             grow_px=mask_grow_px_for(region.region_type),
+            scope=scope,
         )
         self._repo.save_mask(mask)
-        self._repo.update_region(region.with_mask(mask.id))
+        if scope is MaskScope.WHOLE_REGION:
+            self._repo.update_region(region.with_mask(mask.id))
         return mask

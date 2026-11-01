@@ -42,6 +42,9 @@ class ImageRepository(ABC):
     def get_mask(self, mask_id: UUID) -> Mask | None: ...
 
     @abstractmethod
+    def get_masks_for_region(self, region_id: UUID) -> list[Mask]: ...
+
+    @abstractmethod
     def save_edit_session(self, session: EditSession) -> None: ...
 
     @abstractmethod

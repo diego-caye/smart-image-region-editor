@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.domain.value_objects.edit_operation import EditOperation
+from app.domain.value_objects.mask_scope import MaskScope
 from app.domain.value_objects.region_type import RegionType
 
 # How far past the segmented outline an edit to a region may legitimately
@@ -21,3 +23,19 @@ def mask_grow_px_for(region_type: RegionType) -> int:
     if region_type in _SILHOUETTE_PRESERVING:
         return _SILHOUETTE_PRESERVING_GROW_PX
     return _SILHOUETTE_CHANGING_GROW_PX
+
+
+# Torso garments that go under whatever is worn over them. The torso's
+# whole-region mask includes an open jacket, sleeves and all, so with it a
+# real hoodie edit repainted the jacket's sleeves as hoodie sleeves (1 of 4
+# runs) — and telling the model to leave the jacket alone made it 7 of 7.
+# A jacket edit replaces the outer layer, so it keeps the whole region.
+_INNER_LAYER_OPERATIONS = frozenset(
+    {EditOperation.SHIRT_COLOR, EditOperation.T_SHIRT, EditOperation.HOODIE}
+)
+
+
+def mask_scope_for(region_type: RegionType, operation: EditOperation) -> MaskScope:
+    if region_type is RegionType.TORSO and operation in _INNER_LAYER_OPERATIONS:
+        return MaskScope.INNER_LAYER
+    return MaskScope.WHOLE_REGION

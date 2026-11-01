@@ -31,6 +31,7 @@ from app.domain.ports.image_storage import ImageStorage
 from app.domain.value_objects.bounding_box import BoundingBox
 from app.domain.value_objects.edit_operation import EditOperation
 from app.domain.value_objects.garment_color import GarmentColor
+from app.domain.value_objects.mask_scope import MaskScope
 
 
 class FakeImageStorage(ImageStorage):
@@ -82,6 +83,9 @@ class FakeImageRepository(ImageRepository):
 
     def get_mask(self, mask_id: UUID) -> Mask | None:
         return self.masks.get(mask_id)
+
+    def get_masks_for_region(self, region_id: UUID) -> list[Mask]:
+        return [m for m in self.masks.values() if m.region_id == region_id]
 
     def save_edit_session(self, session: EditSession) -> None:
         self.edit_sessions[session.id] = session
@@ -137,8 +141,16 @@ def _solid_png(size: tuple[int, int], value: int | tuple[int, int, int] = 255) -
 class FakeImageSegmenter(ImageSegmenter):
     def __init__(self, mask_bytes: bytes | None = None) -> None:
         self._mask_bytes = mask_bytes if mask_bytes is not None else _solid_png((200, 200), 255)
+        self.scopes_seen: list[MaskScope] = []
 
-    def segment(self, image_bytes: bytes, region: DetectedRegion) -> SegmentationResult:
+    def segment(
+        self,
+        image_bytes: bytes,
+        region: DetectedRegion,
+        *,
+        scope: MaskScope = MaskScope.WHOLE_REGION,
+    ) -> SegmentationResult:
+        self.scopes_seen.append(scope)
         return SegmentationResult(mask_png_bytes=self._mask_bytes, width=200, height=200)
 
 

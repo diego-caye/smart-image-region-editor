@@ -325,6 +325,27 @@ region type rather than operation because a region's mask is computed once
 and cached with its grow_px, and every operation on a given region type
 falls in the same category anyway.
 
+### Inner-layer mask: a shirt edit can't touch the jacket over it
+
+The TORSO mask is the union of SAM2's box mask (on the suit photo, the
+open jacket with its sleeves: 57% of the box) and its center-point mask
+(the T-shirt: another 24%). That's right for a jacket edit, but it also
+*allowed* a hoodie edit to repaint the jacket's sleeves — and a real one
+did, in 1 of 4 runs, leaving a vest. Prompting against it backfired:
+"leave the jacket unchanged, including its sleeves" made it 7 of 7.
+
+So the fix is structural, like the compositor itself. `mask_rules.py`
+gives tops worn under something (shirt color, T-shirt, hoodie)
+`MaskScope.INNER_LAYER`: the center-point mask alone, plus a strip straight
+above its neckline (10% of the region's height) minus the jacket, because a
+hoodie's hood rests behind the neck — with the bare shirt mask it vanished
+and CLIP's hoodie score went 0.06 → 0.15; with the strip, 0.06 → 0.29.
+Without a jacket the point's mask is the whole top, so nothing is lost; if
+the point lands on something tiny (under 5% of the box) it falls back to
+the whole region. Masks are cached per (region, scope); the region keeps
+linking to its whole-region one. Measured on real edits: 6 of 6 kept the
+jacket intact, and the golden torso cases pass with it.
+
 ### Resolution: Qwen's output isn't the crop's size
 
 Qwen Image Edit returns the image at its own preferred resolution, not
@@ -698,17 +719,7 @@ differs):
    accepts `reference_image_png_bytes` and the workflow already has
    `TextEncodeQwenImageEditPlus`'s `image2`/`image3` fields available —
    unused today because the text-only prompt already gives good results.
-5. **Inner-layer mask for under-garments**: the TORSO mask is the union
-   of the jacket and what's under it (see SAM2 above), so a hoodie or
-   T-shirt edit is *allowed* to repaint the jacket's sleeves — and a
-   hoodie did, in 1 of 4 measured runs. Prompting against it backfired:
-   "leave the jacket unchanged, including its sleeves" made it 7 of 7,
-   apparently by drawing the edit's attention to the jacket. The robust
-   fix is structural, like the compositor itself: for operations that
-   change the inner layer, composite through the center-point segment
-   only (the visible shirt), so the jacket can't change by construction.
-   That needs masks cached per (region, layer) instead of per region.
-6. **Thin eyes box on small faces**: `EYES`'s padding is proportional to the
+5. **Thin eyes box on small faces**: `EYES`'s padding is proportional to the
    raw landmark box, so on a photo with a face of only a few pixels (see
    the MediaPipe section above) the resulting box can end up too thin for a
    convincing open/close edit. Fixing this would need a minimum pixel

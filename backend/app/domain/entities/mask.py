@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
+from app.domain.value_objects.mask_scope import MaskScope
+
 
 @dataclass(slots=True)
 class Mask:
@@ -18,6 +20,7 @@ class Mask:
     height: int
     feather_px: int = 0
     grow_px: int = 0
+    scope: MaskScope = MaskScope.WHOLE_REGION
 
     @staticmethod
     def new(
@@ -28,6 +31,7 @@ class Mask:
         height: int,
         feather_px: int = 0,
         grow_px: int = 0,
+        scope: MaskScope = MaskScope.WHOLE_REGION,
     ) -> Mask:
         return Mask(
             id=uuid4(),
@@ -37,4 +41,5 @@ class Mask:
             height=height,
             feather_px=feather_px,
             grow_px=grow_px,
+            scope=scope,
         )

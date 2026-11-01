@@ -86,7 +86,9 @@ rejects a color on an operation that takes none, or a garment without one.
    (on a crop around the face) and for torso, arms and legs (pose).
 2. **Segment** the chosen region with SAM2, prompted with its box. For the
    torso it also segments the center of the chest and merges both masks, so
-   an open jacket *and* the shirt under it are covered.
+   an open jacket *and* the shirt under it are covered — except for tops
+   worn under the jacket (shirt color, T-shirt, hoodie), which get only the
+   shirt plus room around the neck, so the jacket can't change at all.
 3. **Edit** a crop around the region with Qwen Image Edit (via ComfyUI),
    using an instruction written for that operation — the user never types
    it.
@@ -260,11 +262,13 @@ only has to gain, not win. And CLIP's score for the (visibly correct)
 toothy smile varied between 0.48 and 0.77 across three runs, so that case
 asks for 0.4 plus the usual +0.1 gain.
 
-Known limits, both on a person in an open jacket: a garment that reaches
-past the region's outline (a hood rising above the collar) is cut off
-softly at the mask's feathered edge; and a hoodie sometimes takes over the
-jacket's sleeves, leaving a vest (1 of 4 measured runs). Naming the jacket
-in the prompt made it worse (7 of 7), so the prompt doesn't.
+On a person in an open jacket, a hoodie used to take over the jacket's
+sleeves now and then, leaving a vest (1 of 4 runs; asking the model to
+leave the jacket alone made it 7 of 7). Tops worn under the jacket are now
+edited through the shirt's own mask plus a strip above its neckline, so
+the jacket can't change: 6 of 6 real runs (four hoodies, a T-shirt, a shirt
+color) kept it intact. Known limit: the sides of a hood are soft where they
+meet the mask's feathered edge.
 
 The first real run is what found three bugs: the preservation check was
 measuring against the raw mask instead of the one the compositor actually

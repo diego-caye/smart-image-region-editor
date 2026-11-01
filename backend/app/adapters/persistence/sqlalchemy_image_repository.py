@@ -20,6 +20,7 @@ from app.domain.ports.image_repository import ImageRepository
 from app.domain.value_objects.bounding_box import BoundingBox
 from app.domain.value_objects.edit_operation import EditOperation
 from app.domain.value_objects.garment_color import GarmentColor
+from app.domain.value_objects.mask_scope import MaskScope
 from app.domain.value_objects.region_type import RegionType
 from app.infrastructure.database.models import EditRow, EditSessionRow, ImageRow, MaskRow, RegionRow
 
@@ -66,6 +67,10 @@ class SqlAlchemyImageRepository(ImageRepository):
     def get_mask(self, mask_id: UUID) -> Mask | None:
         row = self._session.get(MaskRow, mask_id)
         return _row_to_mask(row) if row else None
+
+    def get_masks_for_region(self, region_id: UUID) -> list[Mask]:
+        rows = self._session.exec(select(MaskRow).where(MaskRow.region_id == region_id)).all()
+        return [_row_to_mask(row) for row in rows]
 
     # --- Edit sessions ---
 
@@ -161,6 +166,7 @@ def _mask_to_row(mask: Mask) -> MaskRow:
         height=mask.height,
         feather_px=mask.feather_px,
         grow_px=mask.grow_px,
+        scope=mask.scope.value,
     )
 
 
@@ -173,6 +179,7 @@ def _row_to_mask(row: MaskRow) -> Mask:
         height=row.height,
         feather_px=row.feather_px,
         grow_px=row.grow_px,
+        scope=MaskScope(row.scope) if row.scope else MaskScope.WHOLE_REGION,
     )
 
 

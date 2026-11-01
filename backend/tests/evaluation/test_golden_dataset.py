@@ -30,7 +30,7 @@ from app.adapters.http.dependencies import (
 )
 from app.adapters.imaging.pillow_image_compositor import blend_mask
 from app.domain.entities.region import DetectedRegion
-from app.domain.services.mask_rules import mask_grow_px_for
+from app.domain.services.mask_rules import mask_grow_px_for, mask_scope_for
 from app.domain.value_objects.bounding_box import BoundingBox
 from app.domain.value_objects.edit_operation import EditOperation
 from app.domain.value_objects.garment_color import GarmentColor
@@ -60,7 +60,10 @@ def test_golden_entry(entry: dict):
     operation = EditOperation(entry["operation"])
     color = GarmentColor(entry["color"]) if "color" in entry else None
 
-    segmentation = get_image_segmenter().segment(image_bytes, region)
+    # the same mask the app would use for this operation (see mask_rules)
+    segmentation = get_image_segmenter().segment(
+        image_bytes, region, scope=mask_scope_for(region_type, operation)
+    )
     editor_result = get_image_editor().edit(
         image_png_bytes=image_bytes,
         mask_png_bytes=segmentation.mask_png_bytes,

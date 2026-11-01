@@ -60,14 +60,17 @@ class Sam2MaskPredictor:
             )
             mask = masks[0] > 0.5
             if also_point_xy is not None:
-                # A single point is ambiguous (part vs. whole object), which
-                # is what multimask_output is for; keep SAM2's own best guess.
-                point_masks, point_scores, _ = predictor.predict(
-                    point_coords=np.array([also_point_xy], dtype=np.float32),
-                    point_labels=np.array([1]),
-                    multimask_output=True,
-                )
-                mask |= point_masks[int(np.argmax(point_scores))] > 0.5
+                mask |= _best_point_mask(predictor, also_point_xy)
+        self._idle.touch()
+        return mask
+
+    def segment_point(self, image_rgb: np.ndarray, point_xy: tuple[float, float]) -> np.ndarray:
+        """The mask of the object under a single positive point (pixel
+        coordinates) — e.g. only the shirt under an open jacket."""
+        with self._lock:
+            predictor = self._loaded_predictor()
+            predictor.set_image(image_rgb)
+            mask = _best_point_mask(predictor, point_xy)
         self._idle.touch()
         return mask
 
@@ -84,3 +87,14 @@ class Sam2MaskPredictor:
         with self._lock:
             self._predictor = None
         release_cuda_memory()
+
+
+def _best_point_mask(predictor, point_xy: tuple[float, float]) -> np.ndarray:
+    # A single point is ambiguous (part vs. whole object), which is what
+    # multimask_output is for; keep SAM2's own best guess.
+    masks, scores, _ = predictor.predict(
+        point_coords=np.array([point_xy], dtype=np.float32),
+        point_labels=np.array([1]),
+        multimask_output=True,
+    )
+    return masks[int(np.argmax(scores))] > 0.5

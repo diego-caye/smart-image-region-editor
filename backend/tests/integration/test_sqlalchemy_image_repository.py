@@ -18,6 +18,7 @@ from app.domain.entities.region import DetectedRegion
 from app.domain.value_objects.bounding_box import BoundingBox
 from app.domain.value_objects.edit_operation import EditOperation
 from app.domain.value_objects.garment_color import GarmentColor
+from app.domain.value_objects.mask_scope import MaskScope
 from app.domain.value_objects.region_type import RegionType
 from app.infrastructure.config.settings import Settings
 from app.infrastructure.database.engine import init_db, make_engine, make_session
@@ -172,3 +173,23 @@ def test_init_db_upgrades_a_database_from_before_garment_colors(tmp_path):
     loaded = SqlAlchemyImageRepository(make_session(engine)).get_edit(edit_id)
     assert loaded.operation is EditOperation.SHIRT_COLOR
     assert loaded.color is GarmentColor.RED
+
+
+def test_masks_of_a_region_round_trip_with_their_scope(tmp_path):
+    repo = _repo_for(tmp_path)
+    region_id = uuid4()
+    whole = Mask.new(region_id=region_id, storage_ref="mask/1.png", width=2, height=2)
+    inner = Mask.new(
+        region_id=region_id,
+        storage_ref="mask/2.png",
+        width=2,
+        height=2,
+        scope=MaskScope.INNER_LAYER,
+    )
+    repo.save_mask(whole)
+    repo.save_mask(inner)
+    repo.save_mask(Mask.new(region_id=uuid4(), storage_ref="mask/3.png", width=2, height=2))
+
+    masks = {m.id: m.scope for m in repo.get_masks_for_region(region_id)}
+    assert masks == {whole.id: MaskScope.WHOLE_REGION, inner.id: MaskScope.INNER_LAYER}
+

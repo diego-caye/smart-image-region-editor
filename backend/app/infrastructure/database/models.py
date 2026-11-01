@@ -49,6 +49,7 @@ class MaskRow(SQLModel, table=True):
     height: int
     feather_px: int
     grow_px: int
+    scope: str | None = None  # None: rows from before scopes = whole_region
 
 
 class EditSessionRow(SQLModel, table=True):

@@ -14,6 +14,7 @@ from app.domain.services.region_operation_rules import OperationNotAllowedForReg
 from app.domain.value_objects.bounding_box import BoundingBox
 from app.domain.value_objects.edit_operation import EditOperation
 from app.domain.value_objects.garment_color import GarmentColor
+from app.domain.value_objects.mask_scope import MaskScope
 from app.domain.value_objects.region_type import RegionType
 from tests.unit.application.fakes import (
     FakeImageCompositor,
@@ -170,7 +171,7 @@ def test_mask_is_only_segmented_once_and_then_reused():
     segment_calls = {"count": 0}
 
     class CountingSegmenter(FakeImageSegmenter):
-        def segment(self, image_bytes, region):
+        def segment(self, image_bytes, region, **kwargs):
             segment_calls["count"] += 1
             return super().segment(image_bytes, region)
 
@@ -315,3 +316,36 @@ def test_a_garment_without_its_color_is_rejected_before_anything_runs():
             )
         )
     assert repo.edits == {}
+
+
+def test_inner_and_whole_region_masks_are_segmented_once_each_and_kept_apart():
+    storage = FakeImageStorage()
+    repo = FakeImageRepository()
+    uploaded, region = _setup_image_with_region(storage, repo, region_type=RegionType.TORSO)
+    segmenter = FakeImageSegmenter()
+    use_case = EditRegionUseCase(
+        repo, storage, segmenter, FakeImageEditor(), FakeImageCompositor()
+    )
+
+    def edit(operation):
+        use_case.execute(
+            EditRegionRequest(
+                image_id=uploaded.image_id,
+                region_id=region.id,
+                operation=operation,
+                color=GarmentColor.RED,
+            )
+        )
+
+    edit(EditOperation.HOODIE)  # inner layer
+    edit(EditOperation.JACKET)  # whole region
+    edit(EditOperation.T_SHIRT)  # inner layer again: cached
+    edit(EditOperation.JACKET)  # whole region again: cached
+
+    assert segmenter.scopes_seen == [MaskScope.INNER_LAYER, MaskScope.WHOLE_REGION]
+    masks = repo.get_masks_for_region(region.id)
+    assert {m.scope for m in masks} == {MaskScope.INNER_LAYER, MaskScope.WHOLE_REGION}
+    # the region links to its whole-region mask, never the inner one
+    linked = repo.get_mask(repo.get_region(region.id).mask_id)
+    assert linked.scope is MaskScope.WHOLE_REGION
+

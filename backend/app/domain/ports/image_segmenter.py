@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from app.domain.entities.region import DetectedRegion
+from app.domain.value_objects.mask_scope import MaskScope
 
 
 @dataclass(slots=True)
@@ -19,7 +20,13 @@ class SegmentationResult:
 
 class ImageSegmenter(ABC):
     """Produces a precise, pixel-level mask for a previously detected
-    region."""
+    region — all of it, or only its innermost visible layer (MaskScope)."""
 
     @abstractmethod
-    def segment(self, image_bytes: bytes, region: DetectedRegion) -> SegmentationResult: ...
+    def segment(
+        self,
+        image_bytes: bytes,
+        region: DetectedRegion,
+        *,
+        scope: MaskScope = MaskScope.WHOLE_REGION,
+    ) -> SegmentationResult: ...
