@@ -135,6 +135,8 @@ export function EditorPage() {
               isUndoing={isUndoing}
               undoError={undoError}
               downloadUrl={downloadUrl}
+              originalUrl={image.url}
+              currentUrl={currentImageUrl ?? image.url}
               onUndo={undoLastEdit}
             />
           </CardContent>

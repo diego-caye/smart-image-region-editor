@@ -1,6 +1,7 @@
 import { REGION_LABELS } from "../../adapters/ui/regionPresentation";
 import { GARMENT_COLOR_LABELS } from "../../adapters/ui/garmentColorPresentation";
 import type { EditHistoryEntry } from "../../domain/types/EditHistory";
+import { BeforeAfterSlider } from "./BeforeAfterSlider";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
@@ -11,10 +12,13 @@ interface EditHistoryPanelProps {
   isUndoing: boolean;
   undoError: string | null;
   downloadUrl: string;
+  originalUrl: string;
+  currentUrl: string;
   onUndo: () => void;
 }
 
-/** What has been applied to the image so far, with Undo (one step at a
+/** What has been applied to the image so far: the original against the
+ * result with every accepted edit, the list of edits, Undo (one step at a
  * time, back to the original) and a download of the image as it is now. */
 export function EditHistoryPanel({
   entries,
@@ -22,10 +26,20 @@ export function EditHistoryPanel({
   isUndoing,
   undoError,
   downloadUrl,
+  originalUrl,
+  currentUrl,
   onUndo,
 }: EditHistoryPanelProps) {
   return (
     <div className="flex flex-col gap-3">
+      {currentUrl !== originalUrl && (
+        <BeforeAfterSlider
+          beforeUrl={originalUrl}
+          afterUrl={currentUrl}
+          beforeLabel="Original"
+          afterLabel="Result"
+        />
+      )}
       {entries.length === 0 ? (
         <p className="text-sm text-muted-foreground">No edits applied yet.</p>
       ) : (

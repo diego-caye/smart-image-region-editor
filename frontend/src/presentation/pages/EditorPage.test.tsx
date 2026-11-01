@@ -301,6 +301,7 @@ describe("EditorPage", () => {
     const user = await setUpToOperationSelected(api);
 
     expect(screen.getByText("No edits applied yet.")).toBeInTheDocument();
+    expect(screen.queryByAltText("Result")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Undo last edit" })).toBeDisabled();
     expect(screen.getByRole("link", { name: "Download image" })).toHaveAttribute(
       "href",
@@ -327,6 +328,16 @@ describe("EditorPage", () => {
 
     const list = await screen.findByRole("list", { name: "Applied edits" });
     expect(list).toHaveTextContent("Right hand → Peace sign");
+    // the original against the result with every accepted edit
+    expect(screen.getByAltText("Original")).toHaveAttribute(
+      "src",
+      "http://example.test/static/original/fake.png",
+    );
+    expect(screen.getByAltText("Result")).toHaveAttribute(
+      "src",
+      "http://example.test/static/final/1.png",
+    );
+    expect(screen.getByRole("slider", { name: "Compare original and result" })).toBeInTheDocument();
     const undo = screen.getByRole("button", { name: "Undo last edit" });
     expect(undo).toBeEnabled();
 
@@ -348,6 +359,8 @@ describe("EditorPage", () => {
     });
     expect(api.undoneImageIds).toEqual(["fake-image-id"]);
     expect(await screen.findByText("Undone")).toBeInTheDocument();
+    // back to the original: nothing left to compare
+    expect(screen.queryByAltText("Result")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Undo last edit" })).toBeDisabled();
   });
 });

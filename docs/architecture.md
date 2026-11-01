@@ -387,6 +387,12 @@ did, far better than two images side by side. The divider is a native
 `<input type="range">` laid invisibly over the image, which gives mouse,
 touch and arrow-key control without custom event handling.
 
+The same slider (`BeforeAfterSlider`) also compares the original upload
+with the result of every accepted edit, in the History card — the place
+to check that several stacked edits still look like one photo. It only
+shows once something has been applied, and disappears again when undo
+gets back to the original.
+
 ### Persistence
 
 SQLite for the MVP (`backend/data/app.db`), via SQLModel. The
